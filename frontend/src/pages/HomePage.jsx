@@ -329,7 +329,11 @@ const HomePage = ({ user, onLogout }) => {
                     {/* Stream Items (Assignments/Announcements) */}
                     <div className="space-y-4">
                         {tasks.map(task => (
-                            <div key={task._id} className="bg-[#18181b] border border-white/10 rounded-2xl p-5 hover:bg-[#1f1f23] transition-colors shadow-md flex gap-4 cursor-pointer">
+                            <div 
+                                key={task._id} 
+                                onClick={() => setSelectedAssignment(task)}
+                                className="bg-[#18181b] border border-white/10 rounded-2xl p-5 hover:bg-[#1f1f23] transition-colors shadow-md flex gap-4 cursor-pointer"
+                            >
                                 <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
                                     <ClipboardList className="w-5 h-5 text-purple-400" />
                                 </div>

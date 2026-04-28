@@ -9,6 +9,7 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
     const [allSubmissions, setAllSubmissions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
+    const [message, setMessage] = useState(null);
 
     const isTeacher = roomDetails?.owner === user?._id;
 
@@ -75,10 +76,15 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
             if (data.success) {
                 setMySubmission(data.submission);
                 setSelectedFile(null);
+                setMessage({ type: 'success', text: 'Assignment submitted successfully!' });
+                setTimeout(() => setMessage(null), 3000);
             } else {
-                alert(data.message || "Failed to submit assignment");
+                setMessage({ type: 'error', text: data.message || "Failed to submit assignment" });
             }
-        } catch (err) { console.error(err); }
+        } catch (err) { 
+            console.error(err); 
+            setMessage({ type: 'error', text: "An error occurred during submission." });
+        }
         setLoading(false);
     };
 
@@ -144,15 +150,21 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-bold text-lg">Your work</h3>
                                     {mySubmission ? (
-                                        <span className={`text-xs font-bold px-2 py-1 rounded-md ${mySubmission.status === 'late' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                            {mySubmission.status === 'late' ? 'Turned in late' : 'Turned in'}
+                                        <span className={`text-xs font-bold px-2 py-1 rounded-md ${mySubmission.status === 'late' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                            {mySubmission.status === 'late' ? '⚠️ Work submitted late' : '✅ Work completed on time'}
                                         </span>
                                     ) : (
                                         <span className={`text-xs font-bold px-2 py-1 rounded-md ${isLate ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                                            {isLate ? 'Missing' : 'Assigned'}
+                                            {isLate ? '⏳ Missing' : '📝 Assigned'}
                                         </span>
                                     )}
                                 </div>
+
+                                {message && (
+                                    <div className={`mb-4 p-3 rounded-lg text-sm font-medium text-center ${message.type === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                                        {message.text}
+                                    </div>
+                                )}
                                 
                                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                                     <textarea
@@ -207,9 +219,9 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                         <button 
                                             type="submit" 
                                             disabled={loading}
-                                            className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2"
+                                            className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2 relative"
                                         >
-                                            {mySubmission ? 'Resubmit' : 'Turn in'}
+                                            {loading ? <span className="animate-pulse flex items-center gap-2"><UploadCloud className="w-4 h-4" /> Uploading...</span> : (mySubmission ? 'Resubmit' : 'Turn in')}
                                         </button>
                                     )}
                                 </form>
@@ -227,8 +239,8 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                         <div key={sub._id} className="bg-black/30 p-3 rounded-lg border border-white/5">
                                             <div className="flex justify-between items-center mb-2">
                                                 <span className="font-medium text-sm">{sub.studentId?.fullname}</span>
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${sub.status === 'late' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                                    {sub.status === 'late' ? 'Late' : 'Done'}
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${sub.status === 'late' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                                    {sub.status === 'late' ? '⚠️ Late' : '✅ On Time'}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-gray-400 mb-3 line-clamp-2">{sub.content || 'No text content provided'}</p>
