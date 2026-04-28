@@ -7,7 +7,7 @@ module.exports.createTask = async (req, res) => {
         console.log("Body:", req.body);
         console.log("User:", req.user?._id);
 
-        const { title, description, priority, tags, dueDate, status, order, roomId } = req.body;
+        const { title, description, priority, tags, dueDate, status, order, roomId, maxMarks, taskType, category } = req.body;
 
         if (!title) return res.status(400).json({ message: "Title is required" });
 
@@ -25,7 +25,10 @@ module.exports.createTask = async (req, res) => {
             status: status || 'Todo',
             order: order || 0,
             room: (isPersonal || !roomId) ? null : roomId,
-            owner: req.user._id
+            owner: req.user._id,
+            maxMarks: maxMarks || 100,
+            taskType: taskType || 'assignment',
+            category: category || ''
         });
 
         console.log("Task saved to DB:", task._id);

@@ -5,6 +5,7 @@ import WelcomePage from './pages/WelcomePage'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import RoomSelectionPage from './pages/RoomSelectionPage'
+import AppLayout from './components/layout/AppLayout'
 
 import API_BASE_URL from './apiConfig'
 
@@ -48,10 +49,12 @@ const App = () => {
       <div className="min-h-screen bg-[#030305] text-white overflow-hidden selection:bg-purple-500/30">
         <Routes>
           <Route path="/" element={user ? <Navigate to="/rooms" /> : <WelcomePage />} />
-          <Route path="/rooms" element={user ? <RoomSelectionPage user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
-          <Route path="/room/:roomId" element={user ? <HomePage user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/login" element={!user ? <LoginPage onLogin={setUser} /> : <Navigate to="/rooms" />} />
           <Route path="/signup" element={!user ? <SignupPage onSignup={setUser} /> : <Navigate to="/rooms" />} />
+          
+          {/* Authenticated Routes wrapped in Layout */}
+          <Route path="/rooms" element={user ? <AppLayout user={user} onLogout={handleLogout}><RoomSelectionPage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
+          <Route path="/room/:roomId" element={user ? <AppLayout user={user} onLogout={handleLogout}><HomePage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
         </Routes>
       </div>
     </BrowserRouter>

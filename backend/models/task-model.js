@@ -21,7 +21,14 @@ const taskSchema = new mongoose.Schema({
     subtasks: [{
         title: { type: String, required: true },
         completed: { type: Boolean, default: false }
-    }]
+    }],
+    maxMarks: { type: Number, default: 100 },
+    taskType: { 
+        type: String, 
+        enum: ['assignment', 'material', 'announcement'], 
+        default: 'assignment' 
+    },
+    category: { type: String, trim: true }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Task", taskSchema);

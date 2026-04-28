@@ -118,7 +118,7 @@ const LoginPage = ({ onLogin }) => {
                 </form>
 
                 <p className="mt-8 text-center text-gray-400 text-sm">
-                    New here? <Link to="/signup" className="text-purple-400 hover:text-purple-300 transition-colors underline font-medium">Create a Student Account</Link>
+                    New here? <Link to="/signup" className="text-purple-400 hover:text-purple-300 transition-colors underline font-medium">Create a {role === 'student' ? 'Student' : 'Teacher'} Account</Link>
                 </p>
             </motion.div>
         </div>

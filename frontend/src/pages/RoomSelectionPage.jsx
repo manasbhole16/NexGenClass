@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Users, ArrowRight, BookOpen, Loader, LogOut, Lock } from 'lucide-react'
+import { Plus, Users, ArrowRight, BookOpen, Loader, LogOut, Lock, MoreVertical, FileText, Bell, UserCircle2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import API_BASE_URL from '../apiConfig'
 
@@ -12,6 +12,8 @@ const RoomSelectionPage = ({ user, onLogout }) => {
     const [joinCode, setJoinCode] = useState('')
     const [loading, setLoading] = useState(false)
     const navigate = useNavigate()
+
+    const isValidCode = joinCode.length >= 5 && joinCode.length <= 8 && /^[a-zA-Z0-9]+$/.test(joinCode);
 
     useEffect(() => {
         fetchRooms()
@@ -74,86 +76,154 @@ const RoomSelectionPage = ({ user, onLogout }) => {
     }
 
     return (
-        <div className="min-h-screen bg-[#030305] text-white p-4 md:p-8">
-            <header className="flex justify-between items-center mb-10 md:mb-12">
+        <div className="min-h-screen p-4 md:p-8">
+            <header className="flex justify-between items-center mb-10 border-b border-white/5 pb-4">
                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-lg">
-                        {user?.fullname?.[0] || 'U'}
-                    </div>
                     <div>
-                        <h1 className="text-xl md:text-2xl font-bold">Welcome, {user?.fullname?.split(' ')[0]}!</h1>
-                        <p className="text-gray-400 text-xs md:text-sm">Student Dashboard</p>
+                        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400">Dashboard</h1>
+                        <span className="text-xs text-gray-500">Debug Role: {user?.role || 'undefined'}</span>
                     </div>
                 </div>
-                <button
-                    onClick={onLogout}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
-                >
-                    <LogOut className="w-5 h-5" />
-                </button>
-            </header>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-12">
-                <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    onClick={() => navigate('/room/personal')}
-                    className="p-5 md:p-6 rounded-2xl bg-gradient-to-br from-indigo-900/40 to-indigo-600/20 border border-indigo-500/30 cursor-pointer group shadow-xl shadow-indigo-500/5"
-                >
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-xl flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
-                            <Lock className="w-5 h-5 md:w-6 md:h-6 text-indigo-400" />
-                        </div>
-                    </div>
-                    <h3 className="text-lg md:text-xl font-bold mb-1">My Private Space</h3>
-                    <p className="text-indigo-300 text-[10px] font-medium uppercase tracking-widest">Personal Board</p>
-                </motion.div>
-
-                <div className="p-5 md:p-6 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-center">
-                    <h3 className="text-gray-400 mb-1 text-xs md:text-sm font-medium">Joined Classes</h3>
-                    <p className="text-2xl md:text-3xl font-bold text-white">{rooms.length}</p>
-                </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6 pt-6 border-t border-white/5">
-                <h2 className="text-xl font-bold">Your Classroom Groups</h2>
-                <div className="flex gap-2 md:gap-4">
-                    <button onClick={() => setIsJoinModalOpen(true)} className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-4 py-2 border border-white/10 rounded-lg hover:bg-white/5 transition-colors text-xs md:text-sm">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => setIsJoinModalOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-lg hover:bg-white/5 transition-colors text-sm font-medium">
                         <Plus className="w-4 h-4" /> Join Class
                     </button>
-                    <button onClick={() => setIsCreateModalOpen(true)} className="flex-1 sm:flex-none justify-center flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-cyan-600 rounded-lg font-bold hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] transition-all text-xs md:text-sm">
-                        <Plus className="w-4 h-4" /> Create Class
-                    </button>
+                    {user?.role === 'teacher' && (
+                        <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-700 transition-all text-sm">
+                            <Plus className="w-4 h-4" /> Create Class
+                        </button>
+                    )}
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-lg shadow-lg cursor-pointer" title="Switch Account" onClick={onLogout}>
+                        {user?.fullname?.[0] || 'U'}
+                    </div>
                 </div>
-            </div>
+            </header>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {rooms.map(room => (
-                    <motion.div key={room._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -5 }} onClick={() => navigate(`/room/${room._id}`)} className="p-5 md:p-6 bg-[#18181b] border border-white/10 rounded-2xl cursor-pointer hover:border-purple-500/50 transition-all group relative">
-                        <div className="flex justify-between items-start mb-6">
-                            <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center"><BookOpen className="w-6 h-6 text-gray-400 group-hover:text-purple-400 transition-colors" /></div>
-                            <span className="text-xs bg-white/5 px-3 py-1 rounded-full text-gray-400 font-mono italic">{room.code}</span>
+                    <motion.div key={room._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -5 }} className="bg-[#18181b] border border-white/10 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group relative flex flex-col h-72">
+                        {/* Card Banner */}
+                        <div 
+                            className="h-24 bg-gradient-to-r from-purple-800 to-indigo-900 p-4 relative cursor-pointer"
+                            onClick={() => navigate(`/room/${room._id}`)}
+                        >
+                            <div className="flex justify-between items-start">
+                                <h2 className="text-lg font-bold text-white truncate max-w-[80%] hover:underline">{room.name}</h2>
+                                <button className="p-1 hover:bg-black/20 rounded-full text-white transition-colors" onClick={(e) => e.stopPropagation()}>
+                                    <MoreVertical className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <p className="text-sm text-purple-200 mt-1">{room.owner === user?._id ? 'Owner' : 'Instructor'}</p>
+                            
+                            {/* Avatar pushing up into banner */}
+                            <div className="absolute -bottom-6 right-4 w-16 h-16 rounded-full border-4 border-[#18181b] bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center font-bold text-xl shadow-md z-10">
+                                {room.name.charAt(0)}
+                            </div>
                         </div>
-                        <h2 className="text-xl font-bold mb-1">{room.name}</h2>
-                        <div className="flex items-center justify-between mt-4">
-                            <div className="flex items-center text-gray-500 text-xs gap-1"><Users className="w-3 h-3" />{room.members.length} Members</div>
-                            <ArrowRight className="w-4 h-4 text-gray-700 group-hover:text-white transition-all group-hover:translate-x-1" />
+
+                        {/* Card Content */}
+                        <div className="p-4 flex-1 flex flex-col justify-between pt-8 cursor-pointer" onClick={() => navigate(`/room/${room._id}`)}>
+                            <div>
+                                <div className="text-xs text-gray-400 font-mono mb-2">Code: {room.code}</div>
+                                {Math.random() > 0.5 && ( // Mock "Due today" logic
+                                    <div className="text-xs text-orange-400 font-medium mb-2">Due today: Assignment 1</div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Card Footer Actions */}
+                        <div className="px-4 py-3 border-t border-white/5 flex justify-end gap-2 bg-[#1f1f23]">
+                            <button className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors" title="Assignments">
+                                <FileText className="w-5 h-5" />
+                            </button>
+                            <button className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors" title="Announcements">
+                                <Bell className="w-5 h-5" />
+                            </button>
                         </div>
                     </motion.div>
                 ))}
             </div>
 
-            {(isCreateModalOpen || isJoinModalOpen) && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="bg-[#18181b] p-8 rounded-2xl border border-white/10 w-full max-w-md">
-                        <h2 className="text-2xl font-bold mb-6">{isCreateModalOpen ? 'Create Class' : 'Join Class'}</h2>
-                        <form onSubmit={isCreateModalOpen ? handleCreateRoom : handleJoinRoom}>
+            {/* Google Classroom Style Join Modal */}
+            {isJoinModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-[#18181b] rounded-xl border border-white/10 w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-white/5 flex justify-between items-center">
+                            <h2 className="text-xl font-bold">Join class</h2>
+                            <button onClick={() => setIsJoinModalOpen(false)} className="text-gray-400 hover:text-white">&times;</button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                            <div className="mb-6 p-4 border border-white/10 rounded-lg bg-white/5 flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-400">You're currently signed in as</p>
+                                    <div className="flex items-center gap-3 mt-2">
+                                        <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center font-bold">
+                                            {user?.fullname?.[0]}
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-sm">{user?.fullname}</p>
+                                            <p className="text-xs text-gray-400">{user?.email}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={onLogout} className="text-sm text-purple-400 hover:text-purple-300 font-medium px-3 py-1.5 border border-purple-500/30 rounded hover:bg-purple-500/10 transition-colors">
+                                    Switch account
+                                </button>
+                            </div>
+
+                            <div className="mb-6 border border-white/10 rounded-lg p-4">
+                                <h3 className="font-bold mb-2">Class code</h3>
+                                <p className="text-sm text-gray-400 mb-4">Ask your teacher for the class code, then enter it here.</p>
+                                <form id="joinForm" onSubmit={handleJoinRoom}>
+                                    <input 
+                                        className="w-full md:w-1/2 bg-transparent border border-white/20 rounded px-4 py-3 focus:border-purple-500 outline-none text-white text-lg tracking-widest font-mono uppercase" 
+                                        placeholder="Class code" 
+                                        value={joinCode} 
+                                        onChange={e => setJoinCode(e.target.value)} 
+                                        autoFocus 
+                                        maxLength={8}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-2">Use a class code with 5-8 letters or numbers, and no spaces or symbols.</p>
+                                </form>
+                            </div>
+                            
+                            <div className="text-sm text-gray-400">
+                                <p className="font-medium mb-1">To sign in with a class code</p>
+                                <ul className="list-disc pl-5 space-y-1">
+                                    <li>Use an authorized account</li>
+                                    <li>Use a class code with 5-8 letters or numbers, and no spaces or symbols</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-white/5 flex justify-end gap-3 bg-[#121214] rounded-b-xl">
+                            <button type="button" onClick={() => setIsJoinModalOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white font-medium">Cancel</button>
+                            <button 
+                                type="submit" 
+                                form="joinForm"
+                                disabled={loading || !isValidCode} 
+                                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded text-white font-medium transition-all"
+                            >
+                                Join
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Modal */}
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-[#18181b] p-6 rounded-xl border border-white/10 w-full max-w-md shadow-2xl">
+                        <h2 className="text-xl font-bold mb-6">Create class</h2>
+                        <form onSubmit={handleCreateRoom}>
                             <div className="mb-6">
-                                <label className="block text-sm text-gray-400 mb-2">{isCreateModalOpen ? 'Class Name' : 'Class Code'}</label>
-                                <input className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 focus:border-purple-500 outline-none text-white" placeholder={isCreateModalOpen ? 'e.g. History' : 'e.g. X7K9P2'} value={isCreateModalOpen ? roomName : joinCode} onChange={e => isCreateModalOpen ? setRoomName(e.target.value) : setJoinCode(e.target.value)} autoFocus />
+                                <input className="w-full bg-black/20 border border-white/20 rounded px-4 py-3 focus:border-purple-500 outline-none text-white transition-colors" placeholder="Class name (required)" value={roomName} onChange={e => setRoomName(e.target.value)} autoFocus required />
                             </div>
                             <div className="flex justify-end gap-3">
-                                <button type="button" onClick={() => { setIsCreateModalOpen(false); setIsJoinModalOpen(false) }} className="px-4 py-2 text-gray-400">Cancel</button>
-                                <button type="submit" disabled={loading} className="px-6 py-2 bg-purple-600 rounded-xl font-bold">{isCreateModalOpen ? 'Create' : 'Join'}</button>
+                                <button type="button" onClick={() => setIsCreateModalOpen(false)} className="px-4 py-2 text-gray-400 font-medium">Cancel</button>
+                                <button type="submit" disabled={loading || !roomName.trim()} className="px-6 py-2 bg-purple-600 rounded text-white font-medium disabled:opacity-50">Create</button>
                             </div>
                         </form>
                     </div>
