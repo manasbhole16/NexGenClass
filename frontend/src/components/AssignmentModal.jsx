@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../apiConfig';
-import { X, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { X, CheckCircle, Clock, AlertCircle, UploadCloud, FileText, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
@@ -8,6 +8,7 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
     const [mySubmission, setMySubmission] = useState(null);
     const [allSubmissions, setAllSubmissions] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
 
     const isTeacher = roomDetails?.owner === user?._id;
 
@@ -49,15 +50,33 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/submissions/${task._id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: submissionContent, roomId: roomDetails._id }),
-                credentials: 'include'
-            });
+            let res;
+            if (selectedFile) {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('content', submissionContent);
+                formData.append('roomId', roomDetails._id);
+                
+                res = await fetch(`${API_BASE_URL}/api/submissions/${task._id}/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+            } else {
+                res = await fetch(`${API_BASE_URL}/api/submissions/${task._id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: submissionContent, roomId: roomDetails._id }),
+                    credentials: 'include'
+                });
+            }
+
             const data = await res.json();
             if (data.success) {
                 setMySubmission(data.submission);
+                setSelectedFile(null);
+            } else {
+                alert(data.message || "Failed to submit assignment");
             }
         } catch (err) { console.error(err); }
         setLoading(false);
@@ -140,9 +159,46 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                         value={submissionContent}
                                         onChange={(e) => setSubmissionContent(e.target.value)}
                                         placeholder="Add private comment or link to your work..."
-                                        className="w-full h-32 bg-black/30 border border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none transition-colors"
+                                        className="w-full h-24 bg-black/30 border border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none transition-colors"
                                         disabled={mySubmission?.status === 'graded'}
                                     />
+
+                                    {/* Current Submission File */}
+                                    {mySubmission?.fileName && (
+                                        <div className="bg-white/5 border border-white/10 p-3 rounded-lg flex items-center justify-between">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <FileText className="w-5 h-5 text-purple-400 flex-shrink-0" />
+                                                <span className="text-sm text-gray-200 truncate">{mySubmission.fileName}</span>
+                                            </div>
+                                            <a 
+                                                href={`${API_BASE_URL}${mySubmission.fileUrl}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="p-1.5 hover:bg-white/10 rounded transition-colors text-gray-400 hover:text-white"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {/* File Input */}
+                                    {mySubmission?.status !== 'graded' && (
+                                        <div className="relative">
+                                            <input 
+                                                type="file" 
+                                                onChange={(e) => setSelectedFile(e.target.files[0])} 
+                                                className="hidden" 
+                                                id="file-upload" 
+                                            />
+                                            <label 
+                                                htmlFor="file-upload"
+                                                className="flex items-center justify-center gap-2 w-full py-2 border-2 border-dashed border-white/20 hover:border-purple-500/50 rounded-lg text-sm font-medium text-gray-400 hover:text-purple-300 transition-colors cursor-pointer bg-black/20 hover:bg-black/40"
+                                            >
+                                                <UploadCloud className="w-5 h-5" />
+                                                {selectedFile ? selectedFile.name : 'Attach a file'}
+                                            </label>
+                                        </div>
+                                    )}
                                     {mySubmission?.status === 'graded' ? (
                                         <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-center">
                                             <p className="text-sm font-medium text-purple-300">Grade: {mySubmission.marksAwarded} / {task.maxMarks || 100}</p>
@@ -175,7 +231,26 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                                     {sub.status === 'late' ? 'Late' : 'Done'}
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-gray-400 mb-3 line-clamp-2">{sub.content || 'No content provided'}</p>
+                                            <p className="text-xs text-gray-400 mb-3 line-clamp-2">{sub.content || 'No text content provided'}</p>
+                                            
+                                            {sub.fileName && (
+                                                <div className="flex items-center justify-between bg-black/40 p-2 rounded border border-white/5 mb-3">
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <FileText className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                                                        <span className="text-xs text-gray-300 truncate" title={sub.fileName}>{sub.fileName}</span>
+                                                    </div>
+                                                    <a 
+                                                        href={`${API_BASE_URL}${sub.fileUrl}`} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="p-1 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors"
+                                                        title="Download attached file"
+                                                    >
+                                                        <Download className="w-3.5 h-3.5" />
+                                                    </a>
+                                                </div>
+                                            )}
+
                                             <div className="flex items-center gap-2">
                                                 <input 
                                                     type="number"

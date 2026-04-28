@@ -10,6 +10,8 @@ const submissionSchema = new mongoose.Schema({
         default: 'submitted'
     },
     content: { type: String }, // Optional text submission
+    fileUrl: { type: String }, // Path to the uploaded file
+    fileName: { type: String }, // Original file name
     marksAwarded: { type: Number, default: null },
     teacherFeedback: { type: String }
 }, { timestamps: true });
