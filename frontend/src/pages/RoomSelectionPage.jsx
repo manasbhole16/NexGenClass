@@ -11,6 +11,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
     const [roomName, setRoomName] = useState('')
     const [joinCode, setJoinCode] = useState('')
     const [loading, setLoading] = useState(false)
+    const [showProfileInfo, setShowProfileInfo] = useState(false)
     const navigate = useNavigate()
 
     const isValidCode = joinCode.length >= 5 && joinCode.length <= 8 && /^[a-zA-Z0-9]+$/.test(joinCode);
@@ -93,8 +94,32 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                             <Plus className="w-4 h-4" /> Create Class
                         </button>
                     )}
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-lg shadow-lg cursor-pointer" title="Switch Account" onClick={onLogout}>
-                        {user?.fullname?.[0] || 'U'}
+                    <div className="relative">
+                        <div 
+                            className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-lg shadow-lg cursor-pointer" 
+                            title="Profile Info" 
+                            onClick={() => setShowProfileInfo(!showProfileInfo)}
+                        >
+                            {user?.fullname?.[0] || 'U'}
+                        </div>
+
+                        {showProfileInfo && (
+                            <div className="absolute top-12 right-0 w-64 bg-[#18181b] border border-white/10 rounded-xl p-4 shadow-2xl z-50 flex flex-col gap-3">
+                                <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-xl">
+                                        {user?.fullname?.[0] || 'U'}
+                                    </div>
+                                    <div className="overflow-hidden">
+                                        <p className="font-bold text-sm truncate">{user?.fullname}</p>
+                                        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                        <p className="text-[10px] uppercase text-purple-400 font-bold mt-0.5">{user?.role}</p>
+                                    </div>
+                                </div>
+                                <button onClick={onLogout} className="w-full px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg text-sm font-medium transition-colors">
+                                    Log Out
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </header>

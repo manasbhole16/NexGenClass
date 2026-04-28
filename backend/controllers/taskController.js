@@ -55,10 +55,13 @@ module.exports.getTasks = async (req, res) => {
 
         if (roomId === 'personal') {
             query = { room: null, owner: req.user._id };
-            console.log("Fetching personal tasks for:", req.user._id);
+        } else if (roomId === 'all') {
+            const Room = require("../models/room-model");
+            const rooms = await Room.find({ members: req.user._id });
+            const roomIds = rooms.map(r => r._id);
+            query = { $or: [{ room: null, owner: req.user._id }, { room: { $in: roomIds } }] };
         } else if (roomId) {
             query = { room: roomId };
-            console.log("Fetching room tasks for room:", roomId);
         } else {
             return res.status(400).json({ message: "Room ID or personal flag required" });
         }

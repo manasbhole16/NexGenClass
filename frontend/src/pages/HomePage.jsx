@@ -56,6 +56,7 @@ const HomePage = ({ user, onLogout }) => {
     const [isChatOpen, setIsChatOpen] = useState(false)
     const [activeTab, setActiveTab] = useState('stream') // 'stream', 'classwork', 'people'
     const [classworkView, setClassworkView] = useState('list') // 'list', 'kanban'
+    const [showProfileInfo, setShowProfileInfo] = useState(false)
     const navigate = useNavigate()
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
@@ -213,10 +214,31 @@ const HomePage = ({ user, onLogout }) => {
                                 )}
                             </div>
                         )}
-                        <div className="hidden md:flex items-center gap-3 pl-4 border-l border-white/10">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center text-xs font-bold shadow-lg">
+                        <div className="hidden md:flex items-center gap-3 pl-4 border-l border-white/10 relative">
+                            <div 
+                                className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center text-xs font-bold shadow-lg cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => setShowProfileInfo(!showProfileInfo)}
+                            >
                                 {user?.fullname?.[0] || 'U'}
                             </div>
+
+                            {showProfileInfo && (
+                                <div className="absolute top-12 right-0 w-64 bg-[#18181b] border border-white/10 rounded-xl p-4 shadow-2xl z-50 flex flex-col gap-3">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+                                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-xl">
+                                            {user?.fullname?.[0] || 'U'}
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <p className="font-bold text-sm truncate">{user?.fullname}</p>
+                                            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                            <p className="text-[10px] uppercase text-purple-400 font-bold mt-0.5">{user?.role}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={onLogout} className="w-full px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg text-sm font-medium transition-colors">
+                                        Log Out
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
