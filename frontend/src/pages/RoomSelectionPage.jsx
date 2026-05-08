@@ -150,9 +150,6 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                         <div className="p-4 flex-1 flex flex-col justify-between pt-8 cursor-pointer" onClick={() => navigate(`/room/${room._id}`)}>
                             <div>
                                 <div className="text-xs text-gray-400 font-mono mb-2">Code: {room.code}</div>
-                                {Math.random() > 0.5 && ( // Mock "Due today" logic
-                                    <div className="text-xs text-orange-400 font-medium mb-2">Due today: Assignment 1</div>
-                                )}
                             </div>
                         </div>
 
