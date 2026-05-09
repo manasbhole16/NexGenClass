@@ -52,6 +52,7 @@ const App = () => {
           <Route path="/" element={user ? <Navigate to="/rooms" /> : <WelcomePage />} />
           <Route path="/login" element={!user ? <LoginPage onLogin={setUser} /> : <Navigate to="/rooms" />} />
           <Route path="/signup" element={!user ? <SignupPage onSignup={setUser} /> : <Navigate to="/rooms" />} />
+          <Route path="/todo" element={user ? <Navigate to="/room/personal" /> : <Navigate to="/" />} />
           
           {/* Authenticated Routes wrapped in Layout */}
           <Route path="/rooms" element={user ? <AppLayout user={user} onLogout={handleLogout}><RoomSelectionPage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />

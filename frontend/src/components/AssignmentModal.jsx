@@ -11,17 +11,18 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [message, setMessage] = useState(null);
 
-    const isTeacher = roomDetails?.owner === user?._id;
+    const hasRoomContext = Boolean(roomDetails?._id);
+    const isTeacher = hasRoomContext && roomDetails?.owner === user?._id;
 
     useEffect(() => {
-        if (isOpen && task) {
+        if (isOpen && task && hasRoomContext) {
             if (isTeacher) {
                 fetchSubmissions();
             } else {
                 fetchMySubmission();
             }
         }
-    }, [isOpen, task, isTeacher]);
+    }, [isOpen, task, isTeacher, hasRoomContext]);
 
     const fetchSubmissions = async () => {
         try {
@@ -35,6 +36,7 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
 
     const fetchMySubmission = async () => {
         try {
+            if (!roomDetails?._id) return;
             const res = await fetch(`${API_BASE_URL}/api/submissions/me?roomId=${roomDetails._id}`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
@@ -49,6 +51,10 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!hasRoomContext) {
+            setMessage({ type: 'error', text: 'Personal tasks do not accept submissions.' });
+            return;
+        }
         setLoading(true);
         try {
             let res;
@@ -143,8 +149,14 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
 
                     {/* Right: Submission/Grading Area */}
                     <div className="md:w-80 border-l border-white/10 pl-0 md:pl-8 flex flex-col gap-6">
-                        
-                        {!isTeacher ? (
+                        {!hasRoomContext ? (
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg">
+                                <h3 className="font-bold text-lg text-white mb-2">Personal task</h3>
+                                <p className="text-sm text-gray-400">
+                                    Submissions are only available inside a class room.
+                                </p>
+                            </div>
+                        ) : !isTeacher ? (
                             // Student View
                             <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg">
                                 <div className="flex justify-between items-center mb-4">

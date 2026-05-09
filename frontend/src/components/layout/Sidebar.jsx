@@ -29,7 +29,7 @@ const Sidebar = ({ user }) => {
     const navItems = [
         { name: 'Home', icon: Home, path: '/rooms' },
         { name: 'Calendar', icon: Calendar, path: '/calendar' },
-        { name: 'To-do', icon: CheckSquare, path: '/todo' },
+        { name: 'To-do', icon: CheckSquare, path: '/room/personal' },
     ];
 
     return (
