@@ -273,6 +273,7 @@ const HomePage = ({ user, onLogout }) => {
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleCreateTask}
                 onTyping={handleTyping}
+                roomId={isPersonal ? 'personal' : roomId}
             />
 
             <AssignmentModal 

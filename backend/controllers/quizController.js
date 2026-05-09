@@ -1,6 +1,8 @@
 const Quiz = require('../models/quiz-model');
 const Question = require('../models/question-model');
 const Attempt = require('../models/attempt-model');
+const { isAiConfigured } = require("../utils/aiClient");
+const { generateQuizQuestionsFromNotes } = require("../services/aiGeneration");
 
 // Create a new Quiz
 module.exports.createQuiz = async (req, res) => {
@@ -46,7 +48,9 @@ module.exports.addQuestions = async (req, res) => {
             questionText: q.questionText,
             options: q.options,
             correctAnswer: q.correctAnswer,
-            marks: q.marks
+            marks: q.marks,
+            difficulty: q.difficulty,
+            explanation: q.explanation
         }));
 
         await Question.insertMany(formattedQuestions);
@@ -216,6 +220,32 @@ module.exports.getQuizResults = async (req, res) => {
             analytics: { totalAttempts, averageScore },
             attempts 
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// AI: Generate quiz questions from notes
+module.exports.generateQuizQuestions = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can generate quizzes." });
+
+        if (!isAiConfigured()) {
+            return res.status(503).json({ message: "AI is not configured. Set NIM_BASE_URL, NIM_API_KEY, and NIM_MODEL." });
+        }
+
+        const { notesText, questionCount, difficultyMix } = req.body;
+        if (!notesText || !questionCount) {
+            return res.status(400).json({ message: "Notes text and question count are required." });
+        }
+
+        const draft = await generateQuizQuestionsFromNotes({
+            notesText,
+            questionCount: Number(questionCount),
+            difficultyMix: difficultyMix || { easy: 50, medium: 30, hard: 20 }
+        });
+
+        return res.json({ success: true, questions: draft.questions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

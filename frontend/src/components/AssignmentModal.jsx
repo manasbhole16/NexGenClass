@@ -145,6 +145,37 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                             <h3 className="text-lg font-semibold mb-2 border-b border-white/10 pb-2">Instructions</h3>
                             <p className="text-gray-300 whitespace-pre-wrap">{task.description || 'No instructions provided.'}</p>
                         </div>
+                        {Array.isArray(task.subtasks) && task.subtasks.length > 0 && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2 border-b border-white/10 pb-2">Checklist</h3>
+                                <ul className="space-y-2">
+                                    {task.subtasks.map((item, index) => (
+                                        <li key={index} className="flex items-center gap-2 text-sm text-gray-300">
+                                            <span className="w-2 h-2 rounded-full bg-purple-500" />
+                                            {item.title}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {Array.isArray(task.rubric) && task.rubric.length > 0 && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2 border-b border-white/10 pb-2">Rubric</h3>
+                                <div className="space-y-3">
+                                    {task.rubric.map((item, index) => (
+                                        <div key={index} className="bg-black/20 border border-white/10 rounded-lg p-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-sm font-semibold text-gray-200">{item.criterion}</p>
+                                                <span className="text-xs text-purple-300 font-bold">{item.points} pts</span>
+                                            </div>
+                                            {item.description && (
+                                                <p className="text-xs text-gray-400 mt-2">{item.description}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right: Submission/Grading Area */}

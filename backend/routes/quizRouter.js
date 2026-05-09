@@ -6,6 +6,7 @@ const quizController = require('../controllers/quizController');
 // All quiz routes are protected
 router.use(protect);
 
+router.post('/generate', quizController.generateQuizQuestions);
 router.post('/create', quizController.createQuiz);
 router.post('/:id/questions', quizController.addQuestions);
 router.post('/:id/publish', quizController.publishQuiz);

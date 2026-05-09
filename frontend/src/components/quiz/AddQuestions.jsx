@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import API_BASE_URL from '../../apiConfig';
-import { ArrowLeft, Save, Plus, Trash2, CheckCircle2, Globe, Lock } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, CheckCircle2, Globe, Lock, Sparkles, Loader } from 'lucide-react';
 
 const AddQuestions = ({ quiz, onBack, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [publishLoading, setPublishLoading] = useState(false);
+    const [aiNotes, setAiNotes] = useState('');
+    const [aiCount, setAiCount] = useState(6);
+    const [aiDifficulty, setAiDifficulty] = useState('50/30/20');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState(null);
     const [questions, setQuestions] = useState([
-        { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1 }
+        { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1, difficulty: 'medium', explanation: '' }
     ]);
     const [isPublished, setIsPublished] = useState(quiz.isPublished);
 
     const handleAddQuestion = () => {
-        setQuestions([...questions, { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1 }]);
+        setQuestions([...questions, { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1, difficulty: 'medium', explanation: '' }]);
     };
 
     const handleRemoveQuestion = (idx) => {
@@ -30,6 +35,50 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
         const newQs = [...questions];
         newQs[qIdx].options[optIdx].text = val;
         setQuestions(newQs);
+    };
+
+    const parseDifficultyMix = () => {
+        if (aiDifficulty === '50/30/20') return { easy: 50, medium: 30, hard: 20 };
+        if (aiDifficulty === '40/40/20') return { easy: 40, medium: 40, hard: 20 };
+        if (aiDifficulty === '30/40/30') return { easy: 30, medium: 40, hard: 30 };
+        return { easy: 50, medium: 30, hard: 20 };
+    };
+
+    const handleGenerate = async () => {
+        if (!aiNotes.trim()) return;
+        setAiLoading(true);
+        setAiError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/quiz/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    notesText: aiNotes,
+                    questionCount: aiCount,
+                    difficultyMix: parseDifficultyMix()
+                }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                const nextQuestions = data.questions.map((q) => ({
+                    questionText: q.questionText || '',
+                    options: Array.isArray(q.options) ? q.options : [{ text: '' }, { text: '' }, { text: '' }, { text: '' }],
+                    correctAnswer: Number.isFinite(Number(q.correctAnswer)) ? Number(q.correctAnswer) : 0,
+                    marks: Number.isFinite(Number(q.marks)) ? Number(q.marks) : 1,
+                    difficulty: q.difficulty || 'medium',
+                    explanation: q.explanation || ''
+                }));
+                setQuestions(nextQuestions.length ? nextQuestions : questions);
+            } else {
+                setAiError(data.message || 'AI generation failed');
+            }
+        } catch (e) {
+            setAiError('AI generation failed');
+            console.error(e);
+        } finally {
+            setAiLoading(false);
+        }
     };
 
     const handleSave = async () => {
@@ -91,6 +140,54 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
             </div>
 
             <div className="space-y-6 h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar pr-2">
+                <div className="bg-black/20 border border-white/10 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 className="text-lg font-semibold text-white">Generate from notes</h3>
+                            <p className="text-xs text-gray-400">Paste lesson text and generate questions with explanations.</p>
+                        </div>
+                        <button
+                            onClick={handleGenerate}
+                            disabled={aiLoading || !aiNotes.trim()}
+                            className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold transition-all disabled:opacity-50"
+                        >
+                            {aiLoading ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            Generate
+                        </button>
+                    </div>
+                    <textarea
+                        value={aiNotes}
+                        onChange={(e) => setAiNotes(e.target.value)}
+                        className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none h-28 resize-none"
+                        placeholder="Paste lesson notes or topic summary..."
+                    />
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Question count</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={aiCount}
+                                onChange={(e) => setAiCount(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Difficulty mix</label>
+                            <select
+                                value={aiDifficulty}
+                                onChange={(e) => setAiDifficulty(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                            >
+                                <option value="50/30/20">50% easy / 30% medium / 20% hard</option>
+                                <option value="40/40/20">40% easy / 40% medium / 20% hard</option>
+                                <option value="30/40/30">30% easy / 40% medium / 30% hard</option>
+                            </select>
+                        </div>
+                    </div>
+                    {aiError && <p className="mt-3 text-xs text-red-400">{aiError}</p>}
+                </div>
+
                 {questions.map((q, qIdx) => (
                     <div key={qIdx} className="bg-black/20 border border-white/5 rounded-2xl p-6 relative group">
                         <button onClick={() => handleRemoveQuestion(qIdx)} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
@@ -106,6 +203,31 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
                                 placeholder={`Enter question ${qIdx + 1}...`}
                             />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Marks</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={q.marks}
+                                    onChange={e => handleChange(qIdx, 'marks', e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Difficulty</label>
+                                <select
+                                    value={q.difficulty || 'medium'}
+                                    onChange={e => handleChange(qIdx, 'difficulty', e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                >
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -126,6 +248,16 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                     />
                                 </div>
                             ))}
+                        </div>
+
+                        <div className="mt-4">
+                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Answer explanation</label>
+                            <textarea
+                                value={q.explanation || ''}
+                                onChange={e => handleChange(qIdx, 'explanation', e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-20 resize-none"
+                                placeholder="Explain why the answer is correct..."
+                            />
                         </div>
                     </div>
                 ))}
