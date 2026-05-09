@@ -28,7 +28,8 @@ const taskSchema = new mongoose.Schema({
         enum: ['assignment', 'material', 'announcement'], 
         default: 'assignment' 
     },
-    category: { type: String, trim: true }
+    category: { type: String, trim: true },
+    deadlineReminderSentAt: { type: Date }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Task", taskSchema);

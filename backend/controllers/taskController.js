@@ -1,4 +1,5 @@
 const Task = require("../models/task-model");
+const { sendMail } = require("../utils/mailer");
 
 // Create Task
 module.exports.createTask = async (req, res) => {
@@ -36,6 +37,28 @@ module.exports.createTask = async (req, res) => {
         if (req.io) {
             req.io.emit("taskCreated", task);
             console.log("Socket event taskCreated emitted");
+        }
+
+        if (req.user?.email) {
+            const scopeLabel = task.room ? "Class task" : "Personal task";
+            const dueLabel = task.dueDate ? new Date(task.dueDate).toLocaleString() : "No due date";
+            const text = [
+                `Hi ${req.user.fullname || "there"},`,
+                "",
+                "A new task was created.",
+                `Title: ${task.title}`,
+                `Type: ${task.taskType || "assignment"}`,
+                `Scope: ${scopeLabel}`,
+                `Due: ${dueLabel}`
+            ].join("\n");
+
+            sendMail({
+                to: req.user.email,
+                subject: `New task: ${task.title}`,
+                text
+            }).catch((err) => {
+                console.error("New task email failed:", err.message);
+            });
         }
 
         res.status(201).json({ success: true, task });
@@ -80,6 +103,14 @@ module.exports.updateTask = async (req, res) => {
     try {
         let task = await Task.findById(req.params.id);
         if (!task) return res.status(404).json({ message: "Task not found" });
+
+        if (req.body.dueDate !== undefined) {
+            const incomingDueDate = req.body.dueDate ? new Date(req.body.dueDate).toISOString() : null;
+            const existingDueDate = task.dueDate ? task.dueDate.toISOString() : null;
+            if (incomingDueDate !== existingDueDate) {
+                req.body.deadlineReminderSentAt = null;
+            }
+        }
 
         task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
 

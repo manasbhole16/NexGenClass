@@ -13,6 +13,7 @@ const chatRoutes = require("./routes/chatRouter");
 const quizRoutes = require("./routes/quizRouter");
 const submissionRoutes = require("./routes/submissionRouter");
 const ChatMessage = require("./models/chatMessage-model");
+const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
 const app = express();
 const server = http.createServer(app);
@@ -35,6 +36,7 @@ const io = new Server(server, {
 
 // Database Connection
 db.connectDB();
+startTaskReminderJob();
 
 // Global Middlewares
 app.use(cors({
