@@ -12,12 +12,17 @@ const RoomSelectionPage = ({ user, onLogout }) => {
     const [joinCode, setJoinCode] = useState('')
     const [loading, setLoading] = useState(false)
     const [showProfileInfo, setShowProfileInfo] = useState(false)
+    const [activeDropdown, setActiveDropdown] = useState(null)
     const navigate = useNavigate()
 
     const isValidCode = joinCode.length >= 5 && joinCode.length <= 8 && /^[a-zA-Z0-9]+$/.test(joinCode);
 
     useEffect(() => {
         fetchRooms()
+        
+        const handleClickOutside = () => setActiveDropdown(null);
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
     }, [])
 
     const fetchRooms = async () => {
@@ -134,9 +139,30 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                         >
                             <div className="flex justify-between items-start">
                                 <h2 className="text-lg font-bold text-white truncate max-w-[80%] hover:underline">{room.name}</h2>
-                                <button className="p-1 hover:bg-black/20 rounded-full text-white transition-colors" onClick={(e) => e.stopPropagation()}>
-                                    <MoreVertical className="w-5 h-5" />
-                                </button>
+                                <div className="relative">
+                                    <button 
+                                        className="p-1 hover:bg-black/20 rounded-full text-white transition-colors" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveDropdown(activeDropdown === room._id ? null : room._id);
+                                        }}
+                                    >
+                                        <MoreVertical className="w-5 h-5" />
+                                    </button>
+                                    
+                                    {activeDropdown === room._id && (
+                                        <div className="absolute top-8 right-0 bg-[#18181b] border border-white/10 rounded-lg shadow-xl z-50 w-36 py-1" onClick={(e) => e.stopPropagation()}>
+                                            {room.owner === user?._id ? (
+                                                <>
+                                                    <button className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors">Edit Class</button>
+                                                    <button className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">Delete Class</button>
+                                                </>
+                                            ) : (
+                                                <button className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">Unenroll</button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <p className="text-sm text-purple-200 mt-1">{room.owner === user?._id ? 'Owner' : 'Instructor'}</p>
                             
@@ -150,9 +176,6 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                         <div className="p-4 flex-1 flex flex-col justify-between pt-8 cursor-pointer" onClick={() => navigate(`/room/${room._id}`)}>
                             <div>
                                 <div className="text-xs text-gray-400 font-mono mb-2">Code: {room.code}</div>
-                                {Math.random() > 0.5 && ( // Mock "Due today" logic
-                                    <div className="text-xs text-orange-400 font-medium mb-2">Due today: Assignment 1</div>
-                                )}
                             </div>
                         </div>
 
