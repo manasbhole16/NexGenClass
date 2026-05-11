@@ -38,18 +38,18 @@ const TaskCard = ({ task }) => {
             style={style}
             {...attributes}
             {...listeners}
-            className="group relative bg-[#18181b] hover:bg-[#27272a] border border-white/5 hover:border-white/10 p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all shadow-lg hover:shadow-xl mb-3"
+            className="group relative bg-white dark:bg-[#18181b] hover:bg-gray-50 dark:hover:bg-[#27272a] border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10 p-4 rounded-xl cursor-grab active:cursor-grabbing transition-all shadow-lg hover:shadow-xl mb-3"
         >
             <div className="flex justify-between items-start mb-2">
                 <span className={`text-xs px-2 py-1 rounded-md border ${priorityColors[task.priority] || priorityColors.Medium}`}>
                     {task.priority}
                 </span>
-                <button className="text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                <button className="text-gray-500 hover:text-gray-900 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
                     <MoreHorizontal className="w-4 h-4" />
                 </button>
             </div>
 
-            <h3 className="text-white font-medium mb-1">{task.title}</h3>
+            <h3 className="text-gray-900 dark:text-white font-medium mb-1">{task.title}</h3>
 
             {task.description && (
                 <p className="text-gray-400 text-sm mb-3 line-clamp-2">{task.description}</p>

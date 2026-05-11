@@ -97,18 +97,18 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-4 sticky top-0 z-10 backdrop-blur-md">
+            <div className="flex justify-between items-center bg-white/80 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-4 sticky top-0 z-10 backdrop-blur-md">
                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} disabled={submitting} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                        <ArrowLeft className="w-5 h-5 text-gray-300" />
+                    <button onClick={onBack} disabled={submitting} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors">
+                        <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                     </button>
                     <div>
-                        <h2 className="text-xl font-bold text-white line-clamp-1">{quiz.title}</h2>
-                        <p className="text-xs text-gray-400">{questions.length} Questions</p>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white line-clamp-1">{quiz.title}</h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{questions.length} Questions</p>
                     </div>
                 </div>
                 
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold font-mono text-lg ${timeLeft < 60 ? 'bg-red-500/20 text-red-500 animate-pulse' : 'bg-black/40 text-pink-400'}`}>
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold font-mono text-lg ${timeLeft < 60 ? 'bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-500 animate-pulse' : 'bg-pink-50 dark:bg-black/40 text-pink-600 dark:text-pink-400'}`}>
                     <Clock className="w-5 h-5" />
                     {formatTime(timeLeft)}
                 </div>
@@ -123,13 +123,13 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
 
             <div className="space-y-6 pb-20">
                 {questions.map((q, idx) => (
-                    <div key={q._id} className="bg-black/20 border border-white/5 rounded-2xl p-6 md:p-8">
+                    <div key={q._id} className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl p-6 md:p-8 shadow-sm">
                         <div className="flex justify-between items-start gap-4 mb-6">
-                            <h3 className="text-lg font-medium text-gray-200">
-                                <span className="text-pink-500 font-bold mr-2">{idx + 1}.</span>
+                            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-200">
+                                <span className="text-pink-600 dark:text-pink-500 font-bold mr-2">{idx + 1}.</span>
                                 {q.questionText}
                             </h3>
-                            <span className="text-xs font-bold text-gray-500 bg-white/5 px-2 py-1 rounded whitespace-nowrap">
+                            <span className="text-xs font-bold text-gray-600 dark:text-gray-500 bg-gray-100 dark:bg-white/5 px-2 py-1 rounded whitespace-nowrap">
                                 {q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}
                             </span>
                         </div>
@@ -138,11 +138,11 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                             {q.options.map((opt, optIdx) => {
                                 const isSelected = answers.find(a => a.questionId === q._id)?.selectedOption === optIdx;
                                 return (
-                                    <label key={optIdx} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-pink-500 bg-pink-500/10' : 'border-white/10 bg-white/5 hover:border-white/30'}`}>
-                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-pink-500' : 'border-gray-500'}`}>
+                                    <label key={optIdx} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-pink-500 bg-pink-50 dark:bg-pink-500/10' : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-gray-400 dark:hover:border-white/30'}`}>
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-pink-500' : 'border-gray-400 dark:border-gray-500'}`}>
                                             {isSelected && <div className="w-2.5 h-2.5 bg-pink-500 rounded-full" />}
                                         </div>
-                                        <span className="text-gray-300 select-none text-sm md:text-base">{opt.text}</span>
+                                        <span className="text-gray-800 dark:text-gray-300 select-none text-sm md:text-base">{opt.text}</span>
                                     </label>
                                 );
                             })}
@@ -151,7 +151,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                 ))}
             </div>
 
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#030305]/80 backdrop-blur-xl border-t border-white/10 z-20 flex justify-center">
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#030305]/80 backdrop-blur-xl border-t border-gray-200 dark:border-white/10 z-20 flex justify-center">
                 <button
                     onClick={submitQuizData}
                     disabled={submitting}

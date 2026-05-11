@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 
 const AppLayout = ({ children, user, onLogout }) => {
     return (
-        <div className="flex h-screen overflow-hidden bg-[#030305] text-white selection:bg-purple-500/30">
+        <div className="flex h-screen overflow-hidden selection:bg-purple-500/30">
             {/* Desktop Sidebar */}
             <Sidebar user={user} />
             

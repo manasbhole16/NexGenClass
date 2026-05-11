@@ -43,11 +43,11 @@ const StudentResult = ({ quiz, user, onBack }) => {
         <div className="max-w-2xl mx-auto space-y-8 relative">
             {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={200} />}
             
-            <button onClick={onBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+            <button onClick={onBack} className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
                 <ArrowLeft className="w-4 h-4" /> Back to Quizzes
             </button>
 
-            <div className="bg-gradient-to-b from-pink-500/20 to-purple-500/5 border border-pink-500/30 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
+            <div className="bg-pink-50 dark:bg-gradient-to-b dark:from-pink-500/20 dark:to-purple-500/5 border border-pink-200 dark:border-pink-500/30 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-full">
                     <div className="absolute top-[-50%] left-[-50%] w-full h-full bg-pink-500/20 blur-[100px] rounded-full" />
                 </div>
@@ -57,20 +57,20 @@ const StudentResult = ({ quiz, user, onBack }) => {
                         {percentage >= 80 ? <Trophy className="w-12 h-12 text-white" /> : <Star className="w-12 h-12 text-white" />}
                     </div>
                     
-                    <h2 className="text-3xl md:text-4xl font-bold text-white mb-2">{percentage >= 80 ? 'Outstanding!' : percentage >= 50 ? 'Good Job!' : 'Keep Practicing!'}</h2>
-                    <p className="text-gray-300 mb-8 max-w-sm mx-auto">You have successfully completed the quiz <strong>"{quiz.title}"</strong>.</p>
+                    <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">{percentage >= 80 ? 'Outstanding!' : percentage >= 50 ? 'Good Job!' : 'Keep Practicing!'}</h2>
+                    <p className="text-gray-700 dark:text-gray-300 mb-8 max-w-sm mx-auto">You have successfully completed the quiz <strong>"{quiz.title}"</strong>.</p>
                     
-                    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 w-full max-w-sm flex justify-around">
+                    <div className="bg-white/80 dark:bg-black/40 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-full max-w-sm flex justify-around shadow-sm">
                         <div className="text-center">
-                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1 font-bold">Your Score</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1 font-bold">Your Score</p>
                             <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-400 to-orange-400">
                                 {result.score}
                             </p>
                         </div>
-                        <div className="w-px bg-white/10" />
+                        <div className="w-px bg-gray-200 dark:bg-white/10" />
                         <div className="text-center">
-                            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1 font-bold">Total Marks</p>
-                            <p className="text-3xl font-bold text-white">{quiz.totalMarks}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1 font-bold">Total Marks</p>
+                            <p className="text-3xl font-bold text-gray-900 dark:text-white">{quiz.totalMarks}</p>
                         </div>
                     </div>
                     

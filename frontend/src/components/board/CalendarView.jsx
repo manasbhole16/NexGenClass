@@ -45,19 +45,19 @@ const CalendarView = ({ tasks }) => {
     };
 
     return (
-        <div className="bg-[#0f0f12] rounded-3xl border border-white/5 overflow-hidden flex flex-col h-full shadow-2xl">
+        <div className="bg-white dark:bg-[#0f0f12] rounded-3xl border border-gray-200 dark:border-white/5 overflow-hidden flex flex-col h-full shadow-2xl">
             {/* Header */}
-            <div className="p-4 md:p-6 border-b border-white/5 flex flex-col gap-4 sm:flex-row justify-between sm:items-center bg-white/[0.02]">
+            <div className="p-4 md:p-6 border-b border-gray-200 dark:border-white/5 flex flex-col gap-4 sm:flex-row justify-between sm:items-center bg-gray-50 dark:bg-white/[0.02]">
                 <div className="flex items-center gap-3">
-                    <CalendarIcon className="w-5 h-5 text-purple-400" />
-                    <h2 className="text-lg md:text-xl font-bold">{format(currentMonth, 'MMMM yyyy')}</h2>
+                    <CalendarIcon className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <h2 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">{format(currentMonth, 'MMMM yyyy')}</h2>
                 </div>
                 <div className="flex items-center gap-3">
 
                     <div className="flex items-center gap-2">
-                        <button onClick={goToToday} className="px-3 py-1.5 text-[10px] md:text-sm font-bold bg-white/5 hover:bg-white/10 rounded-lg transition-all border border-white/5 mr-2">Today</button>
-                        <button onClick={prevPeriod} className="p-2 hover:bg-white/5 rounded-lg transition-colors border border-white/5"><ChevronLeft className="w-5 h-5" /></button>
-                        <button onClick={nextPeriod} className="p-2 hover:bg-white/5 rounded-lg transition-colors border border-white/5"><ChevronRight className="w-5 h-5" /></button>
+                        <button onClick={goToToday} className="px-3 py-1.5 text-[10px] md:text-sm font-bold bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-gray-200 rounded-lg transition-all border border-gray-200 dark:border-white/5 mr-2">Today</button>
+                        <button onClick={prevPeriod} className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200 rounded-lg transition-colors border border-gray-200 dark:border-white/5"><ChevronLeft className="w-5 h-5" /></button>
+                        <button onClick={nextPeriod} className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-700 dark:text-gray-200 rounded-lg transition-colors border border-gray-200 dark:border-white/5"><ChevronRight className="w-5 h-5" /></button>
                     </div>
                 </div>
             </div>
@@ -65,7 +65,7 @@ const CalendarView = ({ tasks }) => {
             {/* Grid */}
             <div className="flex-1 grid grid-cols-7 overflow-y-auto custom-scrollbar">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="p-2 md:p-3 text-center text-[10px] md:text-xs font-bold text-gray-500 border-b border-white/5 uppercase tracking-wider">
+                    <div key={day} className="p-2 md:p-3 text-center text-[10px] md:text-xs font-bold text-gray-500 border-b border-gray-200 dark:border-white/5 uppercase tracking-wider">
                         {day}
                     </div>
                 ))}
@@ -81,9 +81,9 @@ const CalendarView = ({ tasks }) => {
                     const isToday = isSameDay(day, new Date());
 
                     return (
-                        <div key={i} className={`min-h-[100px] border-r border-b border-white/5 p-1 transition-colors hover:bg-white/[0.01] ${isOutside ? 'opacity-40' : ''} ${isToday ? 'bg-purple-500/5' : ''}`}>
+                        <div key={i} className={`min-h-[100px] border-r border-b border-gray-200 dark:border-white/5 p-1 transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.01] ${isOutside ? 'opacity-40' : ''} ${isToday ? 'bg-purple-50 dark:bg-purple-500/5' : ''}`}>
                             <div className="flex justify-between items-center mb-3">
-                                <span className={`text-sm font-medium ${isToday ? 'bg-purple-500 text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg' : 'text-gray-400'}`}>
+                                <span className={`text-sm font-medium ${isToday ? 'bg-purple-600 text-white w-7 h-7 rounded-full flex items-center justify-center shadow-lg' : 'text-gray-600 dark:text-gray-400'}`}>
                                     {format(day, 'd')}
                                 </span>
                             </div>

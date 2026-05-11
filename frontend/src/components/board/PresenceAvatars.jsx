@@ -20,10 +20,10 @@ const PresenceAvatars = ({ users, typingUser }) => {
                             className="relative group"
                             title={u.fullname}
                         >
-                            <div className="w-10 h-10 rounded-full border-2 border-[#030305] bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center text-xs font-bold shadow-lg">
+                            <div className="w-10 h-10 rounded-full border-2 border-white dark:border-[#030305] bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center text-xs font-bold shadow-lg text-white">
                                 {u.fullname?.[0] || '?'}
                             </div>
-                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#030305] shadow-sm" />
+                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-[#030305] shadow-sm" />
 
                             {/* Handcrafted Tooltip */}
                             <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap font-bold">
@@ -34,7 +34,7 @@ const PresenceAvatars = ({ users, typingUser }) => {
                 </AnimatePresence>
 
                 {remainingCount > 0 && (
-                    <div className="w-10 h-10 rounded-full border-2 border-[#030305] bg-[#18181b] flex items-center justify-center text-xs text-gray-400 font-bold z-10">
+                    <div className="w-10 h-10 rounded-full border-2 border-white dark:border-[#030305] bg-gray-100 dark:bg-[#18181b] flex items-center justify-center text-xs text-gray-500 dark:text-gray-400 font-bold z-10">
                         +{remainingCount}
                     </div>
                 )}

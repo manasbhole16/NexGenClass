@@ -120,14 +120,14 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex justify-between items-center bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                    <button onClick={onBack} className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 rounded-lg transition-colors">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h2 className="text-xl font-bold text-white">Edit Questions: {quiz.title}</h2>
-                        <p className="text-xs text-gray-400">Total Marks: {quiz.totalMarks} | Time: {quiz.timeLimit}m</p>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Questions: {quiz.title}</h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Total Marks: {quiz.totalMarks} | Time: {quiz.timeLimit}m</p>
                     </div>
                 </div>
                 <button
@@ -140,11 +140,11 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
             </div>
 
             <div className="space-y-6 h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar pr-2">
-                <div className="bg-black/20 border border-white/10 rounded-2xl p-6">
+                <div className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
                         <div>
-                            <h3 className="text-lg font-semibold text-white">Generate from notes</h3>
-                            <p className="text-xs text-gray-400">Paste lesson text and generate questions with explanations.</p>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Generate from notes</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Paste lesson text and generate questions with explanations.</p>
                         </div>
                         <button
                             onClick={handleGenerate}
@@ -158,7 +158,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                     <textarea
                         value={aiNotes}
                         onChange={(e) => setAiNotes(e.target.value)}
-                        className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none h-28 resize-none"
+                        className="w-full bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none h-28 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                         placeholder="Paste lesson notes or topic summary..."
                     />
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -169,7 +169,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                 min="1"
                                 value={aiCount}
                                 onChange={(e) => setAiCount(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                className="w-full bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
                             />
                         </div>
                         <div>
@@ -177,7 +177,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                             <select
                                 value={aiDifficulty}
                                 onChange={(e) => setAiDifficulty(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                className="w-full bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
                             >
                                 <option value="50/30/20">50% easy / 30% medium / 20% hard</option>
                                 <option value="40/40/20">40% easy / 40% medium / 20% hard</option>
@@ -189,8 +189,8 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                 </div>
 
                 {questions.map((q, qIdx) => (
-                    <div key={qIdx} className="bg-black/20 border border-white/5 rounded-2xl p-6 relative group">
-                        <button onClick={() => handleRemoveQuestion(qIdx)} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
+                    <div key={qIdx} className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl p-6 relative group shadow-sm">
+                        <button onClick={() => handleRemoveQuestion(qIdx)} className="absolute top-4 right-4 p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-all">
                             <Trash2 className="w-4 h-4" />
                         </button>
                         
@@ -200,7 +200,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                 type="text"
                                 value={q.questionText}
                                 onChange={e => handleChange(qIdx, 'questionText', e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                 placeholder={`Enter question ${qIdx + 1}...`}
                             />
                         </div>
@@ -213,7 +213,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                     min="1"
                                     value={q.marks}
                                     onChange={e => handleChange(qIdx, 'marks', e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
                                 />
                             </div>
                             <div>
@@ -221,7 +221,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                 <select
                                     value={q.difficulty || 'medium'}
                                     onChange={e => handleChange(qIdx, 'difficulty', e.target.value)}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
                                 >
                                     <option value="easy">Easy</option>
                                     <option value="medium">Medium</option>
@@ -232,7 +232,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
 
                         <div className="grid grid-cols-2 gap-4">
                             {q.options.map((opt, optIdx) => (
-                                <div key={optIdx} className={`flex items-center gap-3 p-2 rounded-xl border ${q.correctAnswer === optIdx ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10 bg-white/5'}`}>
+                                <div key={optIdx} className={`flex items-center gap-3 p-2 rounded-xl border ${q.correctAnswer === optIdx ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/5' : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5'}`}>
                                     <button
                                         onClick={() => handleChange(qIdx, 'correctAnswer', optIdx)}
                                         className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${q.correctAnswer === optIdx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 hover:border-gray-400'}`}
@@ -243,7 +243,7 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                                         type="text"
                                         value={opt.text}
                                         onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
-                                        className="w-full bg-transparent outline-none text-sm"
+                                        className="w-full bg-transparent outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                         placeholder={`Option ${optIdx + 1}`}
                                     />
                                 </div>
@@ -255,19 +255,19 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                             <textarea
                                 value={q.explanation || ''}
                                 onChange={e => handleChange(qIdx, 'explanation', e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-20 resize-none"
+                                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-20 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                 placeholder="Explain why the answer is correct..."
                             />
                         </div>
                     </div>
                 ))}
 
-                <button onClick={handleAddQuestion} className="w-full py-4 border-2 border-dashed border-white/10 text-gray-400 hover:text-white hover:border-white/30 rounded-2xl flex items-center justify-center gap-2 transition-all">
+                <button onClick={handleAddQuestion} className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-transparent rounded-2xl flex items-center justify-center gap-2 transition-all bg-white dark:bg-transparent">
                     <Plus className="w-5 h-5" /> Add Another Question
                 </button>
             </div>
 
-            <div className="flex justify-end gap-4 border-t border-white/10 pt-4 mt-auto">
+            <div className="flex justify-end gap-4 border-t border-gray-200 dark:border-white/10 pt-4 mt-auto">
                 <button
                     onClick={handleSave}
                     disabled={loading}

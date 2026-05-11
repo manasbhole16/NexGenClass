@@ -43,11 +43,11 @@ const App = () => {
     }
   }
 
-  if (loading) return <div className="min-h-screen bg-[#030305] flex items-center justify-center text-white">Loading...</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-[#030305] text-white overflow-hidden selection:bg-purple-500/30">
+      <div className="min-h-screen overflow-hidden selection:bg-purple-500/30">
         <Routes>
           <Route path="/" element={user ? <Navigate to="/rooms" /> : <WelcomePage />} />
           <Route path="/login" element={!user ? <LoginPage onLogin={setUser} /> : <Navigate to="/rooms" />} />

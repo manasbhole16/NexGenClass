@@ -140,20 +140,20 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="w-full max-w-lg bg-[#18181b] border border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden max-h-[90vh] flex flex-col"
+                        className="w-full max-w-lg bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl relative z-10 overflow-hidden max-h-[90vh] flex flex-col"
                     >
-                        <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-white">New Task</h2>
-                            <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
-                                <X className="w-5 h-5 text-gray-400" />
+                        <div className="p-4 md:p-6 border-b border-gray-200 dark:border-white/10 flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">New Task</h2>
+                            <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                             </button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 overflow-y-auto custom-scrollbar">
-                            <div className="bg-black/20 border border-white/10 rounded-xl p-4">
-                                <label className="block text-sm text-gray-400 mb-2">Generate from prompt</label>
+                            <div className="bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl p-4">
+                                <label className="block text-sm text-gray-700 dark:text-gray-400 mb-2">Generate from prompt</label>
                                 <textarea
-                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600 h-20 resize-none"
+                                    className="w-full bg-white dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 h-20 resize-none"
                                     placeholder="E.g. Chapter 3 lab report on density"
                                     value={aiPrompt}
                                     onChange={(e) => setAiPrompt(e.target.value)}
@@ -173,10 +173,10 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                 {aiError && <p className="mt-2 text-xs text-red-400">{aiError}</p>}
                             </div>
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Title</label>
+                                <label className="block text-sm text-gray-700 dark:text-gray-400 mb-1">Title</label>
                                 <input
                                     required
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600"
+                                    className="w-full bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                     placeholder="What needs to be done?"
                                     value={formData.title}
                                     onBlur={handleBlur}
@@ -187,9 +187,9 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Status</label>
+                                    <label className="block text-sm text-gray-700 dark:text-gray-400 mb-1">Status</label>
                                     <select
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-white"
+                                        className="w-full bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white"
                                         value={formData.status}
                                         onChange={e => setFormData({ ...formData, status: e.target.value })}
                                     >
@@ -200,9 +200,9 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Priority</label>
+                                    <label className="block text-sm text-gray-700 dark:text-gray-400 mb-1">Priority</label>
                                     <select
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-white"
+                                        className="w-full bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white"
                                         value={formData.priority}
                                         onChange={e => setFormData({ ...formData, priority: e.target.value })}
                                     >
@@ -215,12 +215,12 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                             </div>
 
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Due Date</label>
+                                <label className="block text-sm text-gray-700 dark:text-gray-400 mb-1">Due Date</label>
                                 <div className="relative">
                                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                     <input
                                         type="date"
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg pl-10 pr-4 py-2 focus:border-purple-500 outline-none text-white [color-scheme:dark]"
+                                        className="w-full bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg pl-10 pr-4 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white dark:[color-scheme:dark]"
                                         value={formData.dueDate}
                                         onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
                                     />
@@ -228,11 +228,11 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                             </div>
 
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Tags (comma separated)</label>
+                                <label className="block text-sm text-gray-700 dark:text-gray-400 mb-1">Tags (comma separated)</label>
                                 <div className="relative">
                                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                     <input
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg pl-10 pr-4 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600"
+                                        className="w-full bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg pl-10 pr-4 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                         placeholder="Dev, Bug, UI..."
                                         value={formData.tags}
                                         onChange={e => setFormData({ ...formData, tags: e.target.value })}
@@ -242,8 +242,8 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
 
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm text-gray-400">Checklist</label>
-                                    <button type="button" onClick={handleAddSubtask} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                    <label className="block text-sm text-gray-700 dark:text-gray-400">Checklist</label>
+                                    <button type="button" onClick={handleAddSubtask} className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1">
                                         <Plus className="w-3 h-3" /> Add item
                                     </button>
                                 </div>
@@ -254,7 +254,7 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                     {subtasks.map((subtask, index) => (
                                         <div key={index} className="flex items-center gap-2">
                                             <input
-                                                className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600"
+                                                className="flex-1 bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                                 placeholder={`Checklist item ${index + 1}`}
                                                 value={subtask.title || ''}
                                                 onChange={(e) => handleSubtaskChange(index, e.target.value)}
@@ -262,7 +262,7 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemoveSubtask(index)}
-                                                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                                                className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
@@ -273,8 +273,8 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
 
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="block text-sm text-gray-400">Rubric</label>
-                                    <button type="button" onClick={handleAddRubric} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                                    <label className="block text-sm text-gray-700 dark:text-gray-400">Rubric</label>
+                                    <button type="button" onClick={handleAddRubric} className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1">
                                         <Plus className="w-3 h-3" /> Add criterion
                                     </button>
                                 </div>
@@ -283,10 +283,10 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                         <p className="text-xs text-gray-500">No rubric criteria yet.</p>
                                     )}
                                     {rubric.map((item, index) => (
-                                        <div key={index} className="grid grid-cols-1 gap-2 bg-black/20 border border-white/10 rounded-lg p-3">
+                                        <div key={index} className="grid grid-cols-1 gap-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg p-3">
                                             <div className="flex items-center gap-2">
                                                 <input
-                                                    className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600"
+                                                    className="flex-1 bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                                     placeholder="Criterion"
                                                     value={item.criterion || ''}
                                                     onChange={(e) => handleRubricChange(index, 'criterion', e.target.value)}
@@ -294,7 +294,7 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    className="w-24 bg-black/20 border border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600"
+                                                    className="w-24 bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                                     placeholder="Points"
                                                     value={item.points ?? 0}
                                                     onChange={(e) => handleRubricChange(index, 'points', e.target.value)}
@@ -302,13 +302,13 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleRemoveRubric(index)}
-                                                    className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                                                    className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
                                             <textarea
-                                                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-white placeholder-gray-600 h-20 resize-none"
+                                                className="w-full bg-white dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg px-3 py-2 focus:border-purple-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 h-20 resize-none"
                                                 placeholder="Description"
                                                 value={item.description || ''}
                                                 onChange={(e) => handleRubricChange(index, 'description', e.target.value)}
@@ -322,7 +322,7 @@ const NewTaskModal = ({ isOpen, onClose, onSave, onTyping, roomId }) => {
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                                    className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
                                 >
                                     Cancel
                                 </button>

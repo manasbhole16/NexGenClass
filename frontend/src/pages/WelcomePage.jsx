@@ -6,7 +6,7 @@ import heroImage from '../assets/hero.png'
 
 const WelcomePage = () => {
     return (
-        <div className="min-h-screen bg-[#030305] text-white overflow-hidden selection:bg-purple-500/30">
+        <div className="min-h-screen overflow-hidden selection:bg-purple-500/30 transition-colors duration-300">
             {/* Background Gradients */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
                 <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
@@ -28,7 +28,7 @@ const WelcomePage = () => {
                         animate={{ opacity: 1, x: 0 }}
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        className="cursor-pointer px-6 py-2 rounded-full border border-white/10 hover:bg-white/10 transition-colors backdrop-blur-md"
+                        className="cursor-pointer px-6 py-2 rounded-full border border-gray-300 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors backdrop-blur-md text-gray-800 dark:text-white font-medium"
                     >
                         Sign In
                     </motion.button>
@@ -43,7 +43,7 @@ const WelcomePage = () => {
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-6 text-sm text-purple-300"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-100 dark:bg-white/5 border border-purple-200 dark:border-white/10 mb-6 text-sm text-purple-700 dark:text-purple-300 font-medium"
                         >
                             <Activity className="w-4 h-4" />
                             <span>Real-time Collaboration Active</span>
@@ -63,7 +63,7 @@ const WelcomePage = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2, duration: 0.8 }}
-                            className="text-lg text-gray-400 mb-8 max-w-xl mx-auto lg:mx-0"
+                            className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-xl mx-auto lg:mx-0"
                         >
                             Organize tasks, collaborate on projects, and submit assignments in real-time.
                             The ultimate dashboard for modern students and teachers.
@@ -75,7 +75,7 @@ const WelcomePage = () => {
                             className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
                         >
                             <Link to="/signup">
-                                <button className="cursor-pointer group px-8 py-4 bg-white text-black rounded-full font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+                                <button className="cursor-pointer group px-8 py-4 bg-purple-600 text-white dark:bg-white dark:text-black rounded-full font-bold hover:bg-purple-700 dark:hover:bg-gray-100 transition-all flex items-center justify-center gap-2 shadow-lg dark:shadow-[0_0_20px_rgba(255,255,255,0.3)]">
                                     Start Learning
                                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                                 </button>
@@ -118,13 +118,13 @@ const WelcomePage = () => {
                             viewport={{ once: true }}
                             transition={{ delay: 0.2 + index * 0.1 }}
                             whileHover={{ y: -5 }}
-                            className="p-8 rounded-3xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-purple-500/30 transition-all backdrop-blur-sm group"
+                            className="p-8 rounded-3xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:shadow-xl dark:hover:bg-white/10 hover:border-purple-300 dark:hover:border-purple-500/30 transition-all backdrop-blur-sm group"
                         >
                             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                 <feature.icon className="w-6 h-6 text-purple-400" />
                             </div>
                             <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-                            <p className="text-gray-400">{feature.desc}</p>
+                            <p className="text-gray-600 dark:text-gray-400">{feature.desc}</p>
                         </motion.div>
                     ))}
                 </div>

@@ -99,12 +99,12 @@ const RoomChat = ({ roomId, user, isOpen, onClose, socket, isOwner }) => {
                     initial={{ x: 300, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: 300, opacity: 0 }}
-                    className="fixed right-6 bottom-24 w-80 h-[450px] bg-[#0f0f12] border border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-xl"
+                    className="fixed right-6 bottom-24 w-80 h-[450px] bg-white dark:bg-[#0f0f12] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-xl"
                 >
-                    <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                    <div className="p-4 border-b border-gray-200 dark:border-white/10 flex justify-between items-center bg-gray-50 dark:bg-white/5">
                         <div className="flex items-center gap-2">
-                            <MessageSquare className="w-4 h-4 text-purple-400" />
-                            <h3 className="font-bold text-sm">Class Chat</h3>
+                            <MessageSquare className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                            <h3 className="font-bold text-gray-900 dark:text-white text-sm">Class Chat</h3>
                         </div>
                         <div className="flex items-center gap-2">
                             {isOwner && (
@@ -116,7 +116,7 @@ const RoomChat = ({ roomId, user, isOpen, onClose, socket, isOwner }) => {
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                             )}
-                            <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-md transition-colors">
+                            <button onClick={onClose} className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded-md transition-colors">
                                 <X className="w-4 h-4 text-gray-500" />
                             </button>
                         </div>
@@ -125,7 +125,7 @@ const RoomChat = ({ roomId, user, isOpen, onClose, socket, isOwner }) => {
                     <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                         {messages.length === 0 && !error && (
                             <div className="text-center py-10">
-                                <MessageSquare className="w-8 h-8 text-white/5 mx-auto mb-2" />
+                                <MessageSquare className="w-8 h-8 text-gray-200 dark:text-white/5 mx-auto mb-2" />
                                 <p className="text-gray-500 text-xs">No messages yet. Start the conversation!</p>
                             </div>
                         )}
@@ -145,7 +145,7 @@ const RoomChat = ({ roomId, user, isOpen, onClose, socket, isOwner }) => {
                                 </div>
                                 <div className={`px-3 py-2 rounded-2xl text-xs max-w-[90%] ${msg.senderId === user?._id
                                     ? 'bg-purple-600 text-white rounded-tr-none'
-                                    : 'bg-white/5 text-gray-300 rounded-tl-none'
+                                    : 'bg-gray-100 dark:bg-white/5 text-gray-800 dark:text-gray-300 rounded-tl-none'
                                     }`}>
                                     {msg.text}
                                 </div>
@@ -154,7 +154,7 @@ const RoomChat = ({ roomId, user, isOpen, onClose, socket, isOwner }) => {
                         <div ref={scrollRef} />
                     </div>
 
-                    <form onSubmit={handleSend} className="p-4 bg-white/5 border-t border-white/10">
+                    <form onSubmit={handleSend} className="p-4 bg-gray-50 dark:bg-white/5 border-t border-gray-200 dark:border-white/10">
                         <div className="relative">
                             <input
                                 type="text"
@@ -162,7 +162,7 @@ const RoomChat = ({ roomId, user, isOpen, onClose, socket, isOwner }) => {
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder={error ? "Chat limit reached..." : "Type a message..."}
                                 disabled={!!error}
-                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs focus:border-purple-500 outline-none pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full bg-white dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2.5 text-gray-900 dark:text-white text-xs focus:border-purple-500 outline-none pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <button
                                 type="submit"
