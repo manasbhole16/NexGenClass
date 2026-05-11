@@ -22,6 +22,8 @@ const server = http.createServer(app);
 const ORIGIN = [
     "https://task-buddy-4xix.vercel.app",
     "https://task-buddy-4xix.vercel.app/",
+    "https://nexgen-five-pink.vercel.app",
+    "https://nexgen-five-pink.vercel.app/",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:5174",
@@ -38,7 +40,7 @@ const io = new Server(server, {
 
 // Database Connection
 db.connectDB();
-startTaskReminderJob();
+// startTaskReminderJob(); // Disabled for Vercel Serverless compatibility
 
 // Global Middlewares
 app.use(cors({
