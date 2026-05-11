@@ -23,7 +23,9 @@ const ORIGIN = [
     "https://task-buddy-4xix.vercel.app",
     "https://task-buddy-4xix.vercel.app/",
     "http://localhost:5173",
-    "http://127.0.0.1:5173"
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174"
 ];
 
 // Socket.IO Setup
@@ -135,3 +137,6 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`NexGen Backend running on port ${PORT}`);
 });
+
+// Export the Express API for Vercel Serverless Functions
+module.exports = app;
