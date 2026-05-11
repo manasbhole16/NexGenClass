@@ -136,9 +136,11 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-    console.log(`NexGen Backend running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    server.listen(PORT, () => {
+        console.log(`NexGen Backend running on port ${PORT}`);
+    });
+}
 
 // Export the Express API for Vercel Serverless Functions
 module.exports = app;
