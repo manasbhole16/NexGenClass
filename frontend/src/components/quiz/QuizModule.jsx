@@ -59,10 +59,10 @@ const QuizModule = ({ roomId, user }) => {
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">
                         <div>
-                            <h2 className="text-2xl font-bold flex items-center gap-2">
+                            <h2 className="text-2xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
                                 <Brain className="text-pink-500 w-6 h-6" /> Class Quizzes
                             </h2>
-                            <p className="text-sm text-gray-400 mt-1">Test your knowledge and track your progress.</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Test your knowledge and track your progress.</p>
                         </div>
                         {isTeacher && (
                             <button
@@ -75,15 +75,15 @@ const QuizModule = ({ roomId, user }) => {
                     </div>
 
                     {quizzes.length === 0 ? (
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center text-gray-400">
+                        <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-8 text-center text-gray-500 dark:text-gray-400 shadow-sm">
                             No quizzes found for this class yet.
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {quizzes.map(quiz => (
-                                <div key={quiz._id} className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:border-pink-500/50 transition-all group">
+                                <div key={quiz._id} className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-5 hover:border-pink-500/50 transition-all group shadow-sm">
                                     <div className="flex justify-between items-start mb-3">
-                                        <h3 className="font-bold text-lg">{quiz.title}</h3>
+                                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">{quiz.title}</h3>
                                         {isTeacher && (
                                             <span className={`text-xs px-2 py-1 rounded-full ${quiz.isPublished ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
                                                 {quiz.isPublished ? 'Published' : 'Draft'}
@@ -107,7 +107,7 @@ const QuizModule = ({ roomId, user }) => {
                                         <div className="flex gap-2">
                                             <button 
                                                 onClick={() => { setSelectedQuiz(quiz); setView('results'); }}
-                                                className="flex-1 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition-all text-gray-300"
+                                                className="flex-1 py-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-lg text-sm font-bold transition-all text-gray-700 dark:text-gray-300"
                                             >
                                                 Results
                                             </button>
@@ -124,7 +124,7 @@ const QuizModule = ({ roomId, user }) => {
                                             disabled={quiz.hasAttempted} // Disable if they just want to see it, OR let them see results
                                             className={`w-full py-2 flex items-center justify-center gap-2 rounded-lg text-sm font-bold transition-all ${
                                                 quiz.hasAttempted 
-                                                ? 'bg-white/5 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10' 
+                                                ? 'bg-gray-50 dark:bg-white/5 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10' 
                                                 : 'bg-pink-600 hover:bg-pink-700 text-white shadow-lg'
                                             }`}
                                         >

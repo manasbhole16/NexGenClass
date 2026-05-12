@@ -24,11 +24,11 @@ const COLUMNS = [
 const Column = ({ col, tasks, setIsModalOpen }) => {
     const { setNodeRef } = useDroppable({ id: col.id })
     return (
-        <div ref={setNodeRef} className="bg-[#0f0f12] rounded-2xl p-4 flex flex-col h-full border border-white/5 min-w-[280px]">
+        <div ref={setNodeRef} className="bg-white dark:bg-[#0f0f12] rounded-2xl p-4 flex flex-col h-full border border-gray-200 dark:border-white/5 min-w-[280px] transition-colors duration-300">
             <div className="flex justify-between items-center mb-4 px-2">
                 <div className="flex items-center gap-2">
                     <div className={`w-3 h-3 rounded-full ${col.color.replace('/20', '')}`} />
-                    <h3 className="font-medium text-gray-200">{col.title}</h3>
+                    <h3 className="font-medium text-gray-800 dark:text-gray-200">{col.title}</h3>
                 </div>
                 <Plus onClick={() => setIsModalOpen(true)} className="w-4 h-4 text-gray-500 cursor-pointer hover:text-white" />
             </div>
@@ -54,7 +54,7 @@ const HomePage = ({ user, onLogout }) => {
     const [showSettings, setShowSettings] = useState(false)
     const [socket, setSocket] = useState(null)
     const [isChatOpen, setIsChatOpen] = useState(false)
-    const [activeTab, setActiveTab] = useState('stream') // 'stream', 'classwork', 'people'
+    const [activeTab, setActiveTab] = useState('stream') // 'stream', 'classwork', 'quizzes', 'people'
     const [classworkView, setClassworkView] = useState('list') // 'list', 'kanban'
     const [showProfileInfo, setShowProfileInfo] = useState(false)
     const navigate = useNavigate()
@@ -110,7 +110,7 @@ const HomePage = ({ user, onLogout }) => {
         return () => s.disconnect()
     }, [roomId, isPersonal, user])
 
-    const fetchTasks = async () => {
+    async function fetchTasks() {
         try {
             const res = await fetch(`${API_BASE_URL}/api/tasks?roomId=${roomId}`, { credentials: 'include' })
             const data = await res.json()
@@ -174,17 +174,17 @@ const HomePage = ({ user, onLogout }) => {
     }
 
     return (
-        <div className="min-h-screen bg-[#030305] text-white p-4 md:p-8">
-            <header className="flex flex-col mb-8 border-b border-white/5 pb-4">
+        <div className="min-h-screen p-4 md:p-8 transition-colors duration-300">
+            <header className="flex flex-col mb-8 border-b border-gray-200 dark:border-white/5 pb-4">
                 <div className="flex flex-col gap-6 md:flex-row justify-between items-start md:items-center mb-6">
                     <div className="flex items-center gap-4">
-                        <Link to="/rooms" className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"><ArrowLeft className="w-5 h-5 text-gray-400" /></Link>
+                        <Link to="/rooms" className="p-2 bg-gray-100 dark:bg-white/5 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"><ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" /></Link>
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                {isPersonal ? <Lock className="w-4 h-4 text-indigo-400" /> : <Globe className="w-4 h-4 text-purple-400" />}
-                                <h1 className="text-2xl md:text-3xl font-bold">{isPersonal ? 'My Private Space' : roomDetails?.name || 'Class Board'}</h1>
+                                {isPersonal ? <Lock className="w-4 h-4 text-indigo-500 dark:text-indigo-400" /> : <Globe className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+                                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">{isPersonal ? 'My Private Space' : roomDetails?.name || 'Class Board'}</h1>
                             </div>
-                            <p className="text-gray-400 text-xs font-mono">{isPersonal ? 'Private' : `Code: ${roomDetails?.code || '...'}`}</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs font-mono">{isPersonal ? 'Private' : `Code: ${roomDetails?.code || '...'}`}</p>
                         </div>
                     </div>
 
@@ -198,15 +198,15 @@ const HomePage = ({ user, onLogout }) => {
                             <div className="relative">
                                 <button
                                     onClick={() => setShowSettings(!showSettings)}
-                                    className={`p-2 rounded-lg transition-all ${showSettings ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                                    className={`p-2 rounded-lg transition-all ${showSettings ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                                 >
                                     <Settings className="w-5 h-5" />
                                 </button>
                                 {showSettings && (
-                                    <div className="absolute top-12 right-0 w-48 bg-[#18181b] border border-white/10 rounded-xl p-2 shadow-2xl z-50">
+                                    <div className="absolute top-12 right-0 w-48 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-2 shadow-2xl z-50">
                                         <button
                                             onClick={handleDeleteRoom}
-                                            className="w-full flex items-center gap-2 px-3 py-2 text-red-400 hover:bg-red-500/10 rounded-lg text-sm font-medium transition-colors"
+                                            className="w-full flex items-center gap-2 px-3 py-2 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg text-sm font-medium transition-colors"
                                         >
                                             <Trash2 className="w-4 h-4" /> Delete Class
                                         </button>
@@ -223,14 +223,14 @@ const HomePage = ({ user, onLogout }) => {
                             </div>
 
                             {showProfileInfo && (
-                                <div className="absolute top-12 right-0 w-64 bg-[#18181b] border border-white/10 rounded-xl p-4 shadow-2xl z-50 flex flex-col gap-3">
-                                    <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-                                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-xl">
+                                <div className="absolute top-12 right-0 w-64 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-4 shadow-2xl z-50 flex flex-col gap-3">
+                                    <div className="flex items-center gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
+                                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-xl text-white">
                                             {user?.fullname?.[0] || 'U'}
                                         </div>
                                         <div className="overflow-hidden">
-                                            <p className="font-bold text-sm truncate">{user?.fullname}</p>
-                                            <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                                            <p className="font-bold text-sm truncate text-gray-900 dark:text-white">{user?.fullname}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
                                             <p className="text-[10px] uppercase text-purple-400 font-bold mt-0.5">{user?.role}</p>
                                         </div>
                                     </div>
@@ -247,20 +247,26 @@ const HomePage = ({ user, onLogout }) => {
                 <div className="flex gap-8 px-4">
                     <button 
                         onClick={() => setActiveTab('stream')}
-                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'stream' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'}`}
+                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'stream' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'}`}
                     >
                         Stream
                     </button>
                     <button 
                         onClick={() => setActiveTab('classwork')}
-                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'classwork' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'}`}
+                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'classwork' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'}`}
                     >
                         Classwork
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('quizzes')}
+                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'quizzes' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'}`}
+                    >
+                        Quizzes
                     </button>
                     {!isPersonal && (
                         <button 
                             onClick={() => setActiveTab('people')}
-                            className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'people' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'}`}
+                            className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'people' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'}`}
                         >
                             People
                         </button>
@@ -273,6 +279,7 @@ const HomePage = ({ user, onLogout }) => {
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleCreateTask}
                 onTyping={handleTyping}
+                roomId={isPersonal ? 'personal' : roomId}
             />
 
             <AssignmentModal 
@@ -318,11 +325,11 @@ const HomePage = ({ user, onLogout }) => {
 
                     {/* Announce Box */}
                     {roomDetails?.owner === user?._id && (
-                        <div className="bg-[#18181b] border border-white/10 rounded-2xl p-4 flex items-center gap-4 shadow-md cursor-pointer hover:bg-[#1f1f23] transition-colors" onClick={() => setIsModalOpen(true)}>
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold">
+                        <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-4 flex items-center gap-4 shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1f1f23] transition-colors" onClick={() => setIsModalOpen(true)}>
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-white">
                                 {user?.fullname?.[0]}
                             </div>
-                            <span className="text-gray-400 flex-1">Announce something to your class</span>
+                            <span className="text-gray-500 dark:text-gray-400 flex-1">Announce something to your class</span>
                         </div>
                     )}
 
@@ -332,14 +339,14 @@ const HomePage = ({ user, onLogout }) => {
                             <div 
                                 key={task._id} 
                                 onClick={() => setSelectedAssignment(task)}
-                                className="bg-[#18181b] border border-white/10 rounded-2xl p-5 hover:bg-[#1f1f23] transition-colors shadow-md flex gap-4 cursor-pointer"
+                                className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-5 hover:bg-gray-50 dark:hover:bg-[#1f1f23] transition-colors shadow-md flex gap-4 cursor-pointer"
                             >
                                 <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                                    <ClipboardList className="w-5 h-5 text-purple-400" />
+                                    <ClipboardList className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                                 </div>
                                 <div>
-                                    <p className="text-gray-300">
-                                        <span className="font-semibold text-white">Teacher</span> posted a new {task.taskType || 'assignment'}: <span className="font-medium">{task.title}</span>
+                                    <p className="text-gray-700 dark:text-gray-300">
+                                        <span className="font-semibold text-gray-900 dark:text-white">Teacher</span> posted a new {task.taskType || 'assignment'}: <span className="font-medium text-gray-900 dark:text-white">{task.title}</span>
                                     </p>
                                     <p className="text-xs text-gray-500 mt-1">{new Date(task.createdAt).toLocaleDateString()}</p>
                                 </div>
@@ -357,11 +364,11 @@ const HomePage = ({ user, onLogout }) => {
             {activeTab === 'classwork' && (
                 <div className="flex flex-col h-[calc(100vh-220px)]">
                     <div className="flex justify-between items-center mb-6">
-                        <div className="flex gap-2 bg-[#18181b] p-1 rounded-lg border border-white/5">
-                            <button onClick={() => setClassworkView('list')} className={`p-2 rounded-md transition-colors ${classworkView === 'list' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                        <div className="flex gap-2 bg-white dark:bg-[#18181b] p-1 rounded-lg border border-gray-200 dark:border-white/5">
+                            <button onClick={() => setClassworkView('list')} className={`p-2 rounded-md transition-colors ${classworkView === 'list' ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
                                 <ClipboardList className="w-5 h-5" />
                             </button>
-                            <button onClick={() => setClassworkView('kanban')} className={`p-2 rounded-md transition-colors ${classworkView === 'kanban' ? 'bg-purple-500/20 text-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+                            <button onClick={() => setClassworkView('kanban')} className={`p-2 rounded-md transition-colors ${classworkView === 'kanban' ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
                                 <LayoutDashboard className="w-5 h-5" />
                             </button>
                         </div>
@@ -379,26 +386,26 @@ const HomePage = ({ user, onLogout }) => {
                                 if (catTasks.length === 0) return null;
                                 return (
                                     <div key={category || 'Uncategorized'} className="mb-8">
-                                        <h2 className="text-xl font-bold mb-4 text-purple-300 border-b border-white/10 pb-2">{category || 'Classwork'}</h2>
+                                        <h2 className="text-xl font-bold mb-4 text-purple-600 dark:text-purple-300 border-b border-gray-200 dark:border-white/10 pb-2">{category || 'Classwork'}</h2>
                                         <div className="space-y-3">
                                             {catTasks.map(task => (
                                                 <div 
                                                     key={task._id} 
                                                     onClick={() => setSelectedAssignment(task)}
-                                                    className="bg-[#18181b] border border-white/10 rounded-xl p-4 flex justify-between items-center hover:shadow-lg hover:border-purple-500/50 transition-all group cursor-pointer"
+                                                    className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-4 flex justify-between items-center hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-500/50 transition-all group cursor-pointer"
                                                 >
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center">
-                                                            <ClipboardList className="w-5 h-5 text-purple-400" />
+                                                            <ClipboardList className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                                                         </div>
                                                         <div>
-                                                            <h3 className="font-medium text-lg text-gray-200 group-hover:text-white transition-colors">{task.title}</h3>
+                                                            <h3 className="font-medium text-lg text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">{task.title}</h3>
                                                             {task.dueDate && (
                                                                 <p className="text-xs text-gray-500">Due {new Date(task.dueDate).toLocaleDateString()}</p>
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div className="text-xs font-medium px-3 py-1 bg-white/5 rounded-full text-gray-400">
+                                                    <div className="text-xs font-medium px-3 py-1 bg-gray-100 dark:bg-white/5 rounded-full text-gray-600 dark:text-gray-400">
                                                         {task.taskType || 'Assignment'}
                                                     </div>
                                                 </div>
@@ -419,6 +426,12 @@ const HomePage = ({ user, onLogout }) => {
                 </div>
             )}
 
+            {activeTab === 'quizzes' && (
+                <div className="max-w-5xl mx-auto">
+                    <QuizModule roomId={isPersonal ? 'personal' : roomId} user={user} />
+                </div>
+            )}
+
             {activeTab === 'people' && !isPersonal && (
                 <div className="max-w-4xl mx-auto space-y-8">
                     <div>
@@ -435,12 +448,12 @@ const HomePage = ({ user, onLogout }) => {
 
                     <div>
                         <div className="flex justify-between items-center border-b border-purple-500/30 pb-2 mb-4">
-                            <h2 className="text-2xl font-bold text-purple-400">Classmates</h2>
-                            <span className="text-gray-400">{roomDetails?.members?.length || 0} students</span>
+                            <h2 className="text-2xl font-bold text-purple-600 dark:text-purple-400">Classmates</h2>
+                            <span className="text-gray-500 dark:text-gray-400">{roomDetails?.members?.length || 0} students</span>
                         </div>
                         <div className="space-y-1">
                             {roomDetails?.members?.map((member, i) => (
-                                <div key={i} className="flex items-center gap-4 p-4 hover:bg-white/5 rounded-xl transition-colors">
+                                <div key={i} className="flex items-center gap-4 p-4 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors">
                                     <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center font-bold text-white">
                                         S
                                     </div>

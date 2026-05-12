@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Home, Calendar, CheckSquare, BookOpen, ChevronDown, ChevronRight, GraduationCap } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
+import ThemeToggle from '../ThemeToggle';
 
 const Sidebar = ({ user }) => {
     const [rooms, setRooms] = useState([]);
@@ -29,11 +30,11 @@ const Sidebar = ({ user }) => {
     const navItems = [
         { name: 'Home', icon: Home, path: '/rooms' },
         { name: 'Calendar', icon: Calendar, path: '/calendar' },
-        { name: 'To-do', icon: CheckSquare, path: '/todo' },
+        { name: 'To-do', icon: CheckSquare, path: '/room/personal' },
     ];
 
     return (
-        <div className="w-64 h-full bg-[#0a0a0c] border-r border-white/5 flex flex-col pt-6 flex-shrink-0 hidden md:flex">
+        <div className="w-64 h-full bg-white dark:bg-[#0a0a0c] border-r border-gray-200 dark:border-white/5 flex flex-col pt-6 flex-shrink-0 hidden md:flex transition-colors duration-300">
             {/* Logo area */}
             <div className="px-6 mb-8 flex items-center gap-3">
                 <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-cyan-500 rounded-lg flex items-center justify-center shadow-lg">
@@ -54,8 +55,8 @@ const Sidebar = ({ user }) => {
                             to={item.path}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm ${
                                 isActive 
-                                ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-inner' 
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-inner' 
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
                             }`}
                         >
                             <item.icon className="w-5 h-5" />
@@ -64,10 +65,10 @@ const Sidebar = ({ user }) => {
                     );
                 })}
 
-                <div className="my-4 border-t border-white/5 pt-4">
+                <div className="my-4 border-t border-gray-200 dark:border-white/5 pt-4">
                     <button 
                         onClick={() => setIsClassesOpen(!isClassesOpen)}
-                        className="flex items-center justify-between w-full px-3 py-2 text-sm font-bold text-gray-500 uppercase tracking-wider hover:text-white transition-colors"
+                        className="flex items-center justify-between w-full px-3 py-2 text-sm font-bold text-gray-500 uppercase tracking-wider hover:text-gray-900 dark:hover:text-white transition-colors"
                     >
                         Enrolled Classes
                         {isClassesOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -83,8 +84,8 @@ const Sidebar = ({ user }) => {
                                         to={`/room/${room._id}`}
                                         className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-sm ${
                                             isActive 
-                                            ? 'bg-white/10 text-white font-semibold' 
-                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                            ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white font-semibold' 
+                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5'
                                         }`}
                                     >
                                         <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-[10px] uppercase">
@@ -98,6 +99,10 @@ const Sidebar = ({ user }) => {
                     )}
                 </div>
             </nav>
+
+            <div className="p-4 border-t border-gray-200 dark:border-white/5">
+                <ThemeToggle className="w-full flex justify-center" />
+            </div>
         </div>
     );
 };

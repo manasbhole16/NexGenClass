@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import API_BASE_URL from '../../apiConfig';
-import { ArrowLeft, Save, Plus, Trash2, CheckCircle2, Globe, Lock } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, CheckCircle2, Globe, Lock, Sparkles, Loader } from 'lucide-react';
 
 const AddQuestions = ({ quiz, onBack, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [publishLoading, setPublishLoading] = useState(false);
+    const [aiNotes, setAiNotes] = useState('');
+    const [aiCount, setAiCount] = useState(6);
+    const [aiDifficulty, setAiDifficulty] = useState('50/30/20');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiError, setAiError] = useState(null);
     const [questions, setQuestions] = useState([
-        { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1 }
+        { type: 'mcq', questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, referenceAnswer: '', marks: 1, difficulty: 'medium', explanation: '' }
     ]);
     const [isPublished, setIsPublished] = useState(quiz.isPublished);
 
     const handleAddQuestion = () => {
-        setQuestions([...questions, { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1 }]);
+        setQuestions([...questions, { type: 'mcq', questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, referenceAnswer: '', marks: 1, difficulty: 'medium', explanation: '' }]);
     };
 
     const handleRemoveQuestion = (idx) => {
@@ -23,6 +28,21 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
     const handleChange = (idx, field, val) => {
         const newQs = [...questions];
         newQs[idx][field] = val;
+        
+        // Auto-configure options when changing type
+        if (field === 'type') {
+            if (val === 'true_false') {
+                newQs[idx].options = [{ text: 'True' }, { text: 'False' }];
+                newQs[idx].correctAnswer = 0;
+            } else if (val === 'mcq') {
+                newQs[idx].options = [{ text: '' }, { text: '' }, { text: '' }, { text: '' }];
+                newQs[idx].correctAnswer = 0;
+            } else if (val === 'short_answer') {
+                newQs[idx].options = [];
+                newQs[idx].correctAnswer = null;
+            }
+        }
+        
         setQuestions(newQs);
     };
 
@@ -30,6 +50,52 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
         const newQs = [...questions];
         newQs[qIdx].options[optIdx].text = val;
         setQuestions(newQs);
+    };
+
+    const parseDifficultyMix = () => {
+        if (aiDifficulty === '50/30/20') return { easy: 50, medium: 30, hard: 20 };
+        if (aiDifficulty === '40/40/20') return { easy: 40, medium: 40, hard: 20 };
+        if (aiDifficulty === '30/40/30') return { easy: 30, medium: 40, hard: 30 };
+        return { easy: 50, medium: 30, hard: 20 };
+    };
+
+    const handleGenerate = async () => {
+        if (!aiNotes.trim()) return;
+        setAiLoading(true);
+        setAiError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/quiz/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    notesText: aiNotes,
+                    questionCount: aiCount,
+                    difficultyMix: parseDifficultyMix()
+                }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                const nextQuestions = data.questions.map((q) => ({
+                    type: q.type || 'mcq',
+                    questionText: q.questionText || '',
+                    options: Array.isArray(q.options) ? q.options : [{ text: '' }, { text: '' }, { text: '' }, { text: '' }],
+                    correctAnswer: Number.isFinite(Number(q.correctAnswer)) ? Number(q.correctAnswer) : 0,
+                    referenceAnswer: q.referenceAnswer || '',
+                    marks: Number.isFinite(Number(q.marks)) ? Number(q.marks) : 1,
+                    difficulty: q.difficulty || 'medium',
+                    explanation: q.explanation || ''
+                }));
+                setQuestions(nextQuestions.length ? nextQuestions : questions);
+            } else {
+                setAiError(data.message || 'AI generation failed');
+            }
+        } catch (e) {
+            setAiError('AI generation failed');
+            console.error(e);
+        } finally {
+            setAiLoading(false);
+        }
     };
 
     const handleSave = async () => {
@@ -71,14 +137,14 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-2xl p-4">
+            <div className="flex justify-between items-center bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
+                    <button onClick={onBack} className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-gray-300 rounded-lg transition-colors">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h2 className="text-xl font-bold text-white">Edit Questions: {quiz.title}</h2>
-                        <p className="text-xs text-gray-400">Total Marks: {quiz.totalMarks} | Time: {quiz.timeLimit}m</p>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Questions: {quiz.title}</h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Total Marks: {quiz.totalMarks} | Time: {quiz.timeLimit}m</p>
                     </div>
                 </div>
                 <button
@@ -91,51 +157,158 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
             </div>
 
             <div className="space-y-6 h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar pr-2">
+                <div className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Generate from notes</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Paste lesson text and generate questions with explanations.</p>
+                        </div>
+                        <button
+                            onClick={handleGenerate}
+                            disabled={aiLoading || !aiNotes.trim()}
+                            className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-lg font-bold transition-all disabled:opacity-50"
+                        >
+                            {aiLoading ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            Generate
+                        </button>
+                    </div>
+                    <textarea
+                        value={aiNotes}
+                        onChange={(e) => setAiNotes(e.target.value)}
+                        className="w-full bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none h-28 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
+                        placeholder="Paste lesson notes or topic summary..."
+                    />
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Question count</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={aiCount}
+                                onChange={(e) => setAiCount(e.target.value)}
+                                className="w-full bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Difficulty mix</label>
+                            <select
+                                value={aiDifficulty}
+                                onChange={(e) => setAiDifficulty(e.target.value)}
+                                className="w-full bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
+                            >
+                                <option value="50/30/20">50% easy / 30% medium / 20% hard</option>
+                                <option value="40/40/20">40% easy / 40% medium / 20% hard</option>
+                                <option value="30/40/30">30% easy / 40% medium / 30% hard</option>
+                            </select>
+                        </div>
+                    </div>
+                    {aiError && <p className="mt-3 text-xs text-red-400">{aiError}</p>}
+                </div>
+
                 {questions.map((q, qIdx) => (
-                    <div key={qIdx} className="bg-black/20 border border-white/5 rounded-2xl p-6 relative group">
-                        <button onClick={() => handleRemoveQuestion(qIdx)} className="absolute top-4 right-4 p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
+                    <div key={qIdx} className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl p-6 relative group shadow-sm">
+                        <button onClick={() => handleRemoveQuestion(qIdx)} className="absolute top-4 right-4 p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-all">
                             <Trash2 className="w-4 h-4" />
                         </button>
                         
                         <div className="mb-4 pr-8">
-                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Question {qIdx + 1}</label>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-xs text-gray-400 uppercase tracking-wider font-bold">Question {qIdx + 1}</label>
+                                <select 
+                                    value={q.type || 'mcq'}
+                                    onChange={e => handleChange(qIdx, 'type', e.target.value)}
+                                    className="bg-transparent text-xs text-pink-500 font-bold outline-none cursor-pointer"
+                                >
+                                    <option value="mcq">Multiple Choice</option>
+                                    <option value="true_false">True / False</option>
+                                    <option value="short_answer">Short Answer</option>
+                                </select>
+                            </div>
                             <input
                                 type="text"
                                 value={q.questionText}
                                 onChange={e => handleChange(qIdx, 'questionText', e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none"
+                                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
                                 placeholder={`Enter question ${qIdx + 1}...`}
                             />
                         </div>
 
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Marks</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={q.marks}
+                                    onChange={e => handleChange(qIdx, 'marks', e.target.value)}
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Difficulty</label>
+                                <select
+                                    value={q.difficulty || 'medium'}
+                                    onChange={e => handleChange(qIdx, 'difficulty', e.target.value)}
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
+                                >
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
-                            {q.options.map((opt, optIdx) => (
-                                <div key={optIdx} className={`flex items-center gap-3 p-2 rounded-xl border ${q.correctAnswer === optIdx ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10 bg-white/5'}`}>
+                            {q.type !== 'short_answer' && q.options.map((opt, optIdx) => (
+                                <div key={optIdx} className={`flex items-center gap-3 p-2 rounded-xl border ${q.correctAnswer === optIdx ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/5' : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5'}`}>
                                     <button
                                         onClick={() => handleChange(qIdx, 'correctAnswer', optIdx)}
-                                        className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${q.correctAnswer === optIdx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 hover:border-gray-400'}`}
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all shrink-0 ${q.correctAnswer === optIdx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 hover:border-gray-400'}`}
                                     >
                                         {q.correctAnswer === optIdx && <CheckCircle2 className="w-4 h-4" />}
                                     </button>
                                     <input
                                         type="text"
                                         value={opt.text}
+                                        disabled={q.type === 'true_false'}
                                         onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
-                                        className="w-full bg-transparent outline-none text-sm"
+                                        className="w-full bg-transparent outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 disabled:opacity-70 disabled:cursor-not-allowed"
                                         placeholder={`Option ${optIdx + 1}`}
                                     />
                                 </div>
                             ))}
                         </div>
+
+                        {q.type === 'short_answer' && (
+                            <div className="mt-4">
+                                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Reference Answer (For grading)</label>
+                                <textarea
+                                    value={q.referenceAnswer || ''}
+                                    onChange={e => handleChange(qIdx, 'referenceAnswer', e.target.value)}
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-16 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
+                                    placeholder="Enter keywords or example answer..."
+                                />
+                            </div>
+                        )}
+
+                        <div className="mt-4">
+                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Answer explanation</label>
+                            <textarea
+                                value={q.explanation || ''}
+                                onChange={e => handleChange(qIdx, 'explanation', e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-20 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
+                                placeholder="Explain why the answer is correct..."
+                            />
+                        </div>
                     </div>
                 ))}
 
-                <button onClick={handleAddQuestion} className="w-full py-4 border-2 border-dashed border-white/10 text-gray-400 hover:text-white hover:border-white/30 rounded-2xl flex items-center justify-center gap-2 transition-all">
+                <button onClick={handleAddQuestion} className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:border-gray-400 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-transparent rounded-2xl flex items-center justify-center gap-2 transition-all bg-white dark:bg-transparent">
                     <Plus className="w-5 h-5" /> Add Another Question
                 </button>
             </div>
 
-            <div className="flex justify-end gap-4 border-t border-white/10 pt-4 mt-auto">
+            <div className="flex justify-end gap-4 border-t border-gray-200 dark:border-white/10 pt-4 mt-auto">
                 <button
                     onClick={handleSave}
                     disabled={loading}

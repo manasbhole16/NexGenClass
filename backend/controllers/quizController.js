@@ -1,6 +1,8 @@
 const Quiz = require('../models/quiz-model');
 const Question = require('../models/question-model');
 const Attempt = require('../models/attempt-model');
+const { isAiConfigured } = require("../utils/aiClient");
+const { generateQuizQuestionsFromNotes } = require("../services/aiGeneration");
 
 // Create a new Quiz
 module.exports.createQuiz = async (req, res) => {
@@ -43,10 +45,14 @@ module.exports.addQuestions = async (req, res) => {
 
         const formattedQuestions = questions.map(q => ({
             quizId: id,
+            type: q.type || 'mcq',
             questionText: q.questionText,
-            options: q.options,
+            options: q.options || [],
             correctAnswer: q.correctAnswer,
-            marks: q.marks
+            referenceAnswer: q.referenceAnswer,
+            marks: q.marks,
+            difficulty: q.difficulty,
+            explanation: q.explanation
         }));
 
         await Question.insertMany(formattedQuestions);
@@ -82,7 +88,8 @@ module.exports.getQuizzesByRoom = async (req, res) => {
         const { roomId } = req.params;
         
         let filter = { roomId };
-        if (req.user.role === 'student') {
+        const userRole = (req.user.role || 'student').toLowerCase();
+        if (userRole === 'student') {
             filter.isPublished = true;
         }
 
@@ -90,7 +97,8 @@ module.exports.getQuizzesByRoom = async (req, res) => {
         
         // For students, fetch attempt status
         let quizzesWithStatus = quizzes;
-        if (req.user.role === 'student') {
+        const userRole2 = (req.user.role || 'student').toLowerCase();
+        if (userRole2 === 'student') {
             const attempts = await Attempt.find({ roomId, studentId: req.user._id });
             const attemptedQuizIds = attempts.map(a => a.quizId.toString());
             
@@ -116,9 +124,11 @@ module.exports.getQuizDetails = async (req, res) => {
         const questions = await Question.find({ quizId: id });
 
         // Strip correct answers if it's a student
-        if (req.user.role === 'student') {
+        const userRole = (req.user.role || 'student').toLowerCase();
+        if (userRole === 'student') {
             const safeQuestions = questions.map(q => ({
                 _id: q._id,
+                type: q.type,
                 questionText: q.questionText,
                 options: q.options,
                 marks: q.marks
@@ -135,7 +145,10 @@ module.exports.getQuizDetails = async (req, res) => {
 // Attempt Quiz (Student submit)
 module.exports.attemptQuiz = async (req, res) => {
     try {
-        if (req.user.role !== 'student') return res.status(403).json({ message: "Only students can attempt quizzes." });
+        const userRole = (req.user?.role || 'student').toLowerCase();
+        if (userRole !== 'student') {
+            return res.status(403).json({ message: "Only students can attempt quizzes." });
+        }
 
         const { id } = req.params;
         const { answers } = req.body; // e.g. [{questionId, selectedOption}]
@@ -151,18 +164,27 @@ module.exports.attemptQuiz = async (req, res) => {
         const questions = await Question.find({ quizId: id });
         
         let score = 0;
+        let requiresManualEvaluation = false;
         const processedAnswers = [];
 
         for (let userAns of answers) {
             const question = questions.find(q => q._id.toString() === userAns.questionId);
             if (question) {
-                if (question.correctAnswer === userAns.selectedOption) {
-                    score += question.marks;
+                if (question.type === 'short_answer') {
+                    requiresManualEvaluation = true;
+                    processedAnswers.push({
+                        questionId: question._id,
+                        textAnswer: userAns.textAnswer
+                    });
+                } else {
+                    if (question.correctAnswer === userAns.selectedOption) {
+                        score += question.marks;
+                    }
+                    processedAnswers.push({
+                        questionId: question._id,
+                        selectedOption: userAns.selectedOption
+                    });
                 }
-                processedAnswers.push({
-                    questionId: question._id,
-                    selectedOption: userAns.selectedOption
-                });
             }
         }
 
@@ -171,7 +193,8 @@ module.exports.attemptQuiz = async (req, res) => {
             studentId: req.user._id,
             roomId: quiz.roomId,
             answers: processedAnswers,
-            score
+            score,
+            isEvaluated: !requiresManualEvaluation
         });
 
         res.status(201).json({ success: true, attempt });
@@ -185,7 +208,8 @@ module.exports.getStudentResult = async (req, res) => {
     try {
         const { id, studentId } = req.params;
         // Verify permissions
-        if (req.user.role === 'student' && req.user._id.toString() !== studentId) {
+        const userRole = (req.user.role || 'student').toLowerCase();
+        if (userRole === 'student' && req.user._id.toString() !== studentId) {
             return res.status(403).json({ message: "Unauthorized to view this result." });
         }
 
@@ -205,6 +229,7 @@ module.exports.getQuizResults = async (req, res) => {
 
         const { id } = req.params;
         const attempts = await Attempt.find({ quizId: id }).populate('studentId', 'fullname email').sort({ score: -1 });
+        const questions = await Question.find({ quizId: id });
 
         const totalAttempts = attempts.length;
         const averageScore = totalAttempts > 0 
@@ -214,8 +239,66 @@ module.exports.getQuizResults = async (req, res) => {
         res.json({ 
             success: true, 
             analytics: { totalAttempts, averageScore },
-            attempts 
+            attempts,
+            questions
         });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Evaluate Attempt (Teacher marking short answers)
+module.exports.evaluateAttempt = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can evaluate attempts." });
+
+        const { id, attemptId } = req.params;
+        const { addedScore, teacherFeedback } = req.body;
+
+        const attempt = await Attempt.findById(attemptId);
+        if (!attempt || attempt.quizId.toString() !== id) {
+            return res.status(404).json({ message: "Attempt not found" });
+        }
+
+        // Verify teacher owns the quiz
+        const quiz = await Quiz.findById(id);
+        if (quiz.createdBy.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: "Not authorized to modify this quiz." });
+        }
+
+        attempt.score += addedScore || 0;
+        attempt.teacherFeedback = teacherFeedback;
+        attempt.isEvaluated = true;
+
+        await attempt.save();
+
+        res.json({ success: true, attempt });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// AI: Generate quiz questions from notes
+module.exports.generateQuizQuestions = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can generate quizzes." });
+
+        if (!isAiConfigured()) {
+            return res.status(503).json({ message: "AI is not configured. Set NIM_BASE_URL, NIM_API_KEY, and NIM_MODEL." });
+        }
+
+        const { notesText, questionCount, difficultyMix } = req.body;
+        if (!notesText || !questionCount) {
+            return res.status(400).json({ message: "Notes text and question count are required." });
+        }
+
+        const draft = await generateQuizQuestionsFromNotes({
+            notesText,
+            questionCount: Number(questionCount),
+            difficultyMix: difficultyMix || { easy: 50, medium: 30, hard: 20 }
+        });
+
+        return res.json({ success: true, questions: draft.questions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

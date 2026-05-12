@@ -11,17 +11,18 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [message, setMessage] = useState(null);
 
-    const isTeacher = roomDetails?.owner === user?._id;
+    const hasRoomContext = Boolean(roomDetails?._id);
+    const isTeacher = hasRoomContext && roomDetails?.owner === user?._id;
 
     useEffect(() => {
-        if (isOpen && task) {
+        if (isOpen && task && hasRoomContext) {
             if (isTeacher) {
                 fetchSubmissions();
             } else {
                 fetchMySubmission();
             }
         }
-    }, [isOpen, task, isTeacher]);
+    }, [isOpen, task, isTeacher, hasRoomContext]);
 
     const fetchSubmissions = async () => {
         try {
@@ -35,6 +36,7 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
 
     const fetchMySubmission = async () => {
         try {
+            if (!roomDetails?._id) return;
             const res = await fetch(`${API_BASE_URL}/api/submissions/me?roomId=${roomDetails._id}`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
@@ -49,6 +51,10 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!hasRoomContext) {
+            setMessage({ type: 'error', text: 'Personal tasks do not accept submissions.' });
+            return;
+        }
         setLoading(true);
         try {
             let res;
@@ -105,14 +111,14 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
     const isLate = task.dueDate && new Date() > new Date(task.dueDate);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-[#18181b] rounded-2xl border border-white/10 w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-[#18181b] rounded-2xl border border-gray-200 dark:border-white/10 w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
                 
                 {/* Header */}
-                <div className="p-6 border-b border-white/5 flex justify-between items-start">
+                <div className="p-6 border-b border-gray-200 dark:border-white/5 flex justify-between items-start">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
-                            <span className="text-xs bg-purple-500/20 text-purple-400 px-3 py-1 rounded-full font-medium">
+                            <span className="text-xs bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 px-3 py-1 rounded-full font-medium">
                                 {task.category || 'Classwork'}
                             </span>
                             {task.dueDate && (
@@ -122,11 +128,11 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                 </span>
                             )}
                         </div>
-                        <h2 className="text-2xl font-bold text-white">{task.title}</h2>
-                        <p className="text-sm text-gray-400 mt-1">{task.maxMarks || 100} points</p>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{task.title}</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{task.maxMarks || 100} points</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-400 hover:text-white" />
+                    <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white" />
                     </button>
                 </div>
 
@@ -136,19 +142,56 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                     {/* Left: Task Details */}
                     <div className="flex-1 space-y-6">
                         <div>
-                            <h3 className="text-lg font-semibold mb-2 border-b border-white/10 pb-2">Instructions</h3>
-                            <p className="text-gray-300 whitespace-pre-wrap">{task.description || 'No instructions provided.'}</p>
+                            <h3 className="text-lg font-semibold mb-2 border-b border-gray-200 dark:border-white/10 pb-2 text-gray-900 dark:text-white">Instructions</h3>
+                            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{task.description || 'No instructions provided.'}</p>
                         </div>
+                        {Array.isArray(task.subtasks) && task.subtasks.length > 0 && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2 border-b border-gray-200 dark:border-white/10 pb-2 text-gray-900 dark:text-white">Checklist</h3>
+                                <ul className="space-y-2">
+                                    {task.subtasks.map((item, index) => (
+                                        <li key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                            <span className="w-2 h-2 rounded-full bg-purple-500" />
+                                            {item.title}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {Array.isArray(task.rubric) && task.rubric.length > 0 && (
+                            <div>
+                                <h3 className="text-lg font-semibold mb-2 border-b border-gray-200 dark:border-white/10 pb-2 text-gray-900 dark:text-white">Rubric</h3>
+                                <div className="space-y-3">
+                                    {task.rubric.map((item, index) => (
+                                        <div key={index} className="bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg p-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{item.criterion}</p>
+                                                <span className="text-xs text-purple-600 dark:text-purple-300 font-bold">{item.points} pts</span>
+                                            </div>
+                                            {item.description && (
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{item.description}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right: Submission/Grading Area */}
-                    <div className="md:w-80 border-l border-white/10 pl-0 md:pl-8 flex flex-col gap-6">
-                        
-                        {!isTeacher ? (
+                    <div className="md:w-80 border-l border-gray-200 dark:border-white/10 pl-0 md:pl-8 flex flex-col gap-6">
+                        {!hasRoomContext ? (
+                            <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-5 shadow-lg">
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-2">Personal task</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    Submissions are only available inside a class room.
+                                </p>
+                            </div>
+                        ) : !isTeacher ? (
                             // Student View
-                            <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg">
+                            <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-5 shadow-lg">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-bold text-lg">Your work</h3>
+                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">Your work</h3>
                                     {mySubmission ? (
                                         <span className={`text-xs font-bold px-2 py-1 rounded-md ${mySubmission.status === 'late' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                                             {mySubmission.status === 'late' ? '⚠️ Work submitted late' : '✅ Work completed on time'}
@@ -171,16 +214,16 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                         value={submissionContent}
                                         onChange={(e) => setSubmissionContent(e.target.value)}
                                         placeholder="Add private comment or link to your work..."
-                                        className="w-full h-24 bg-black/30 border border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none transition-colors"
+                                        className="w-full h-24 bg-white dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-lg p-3 text-sm focus:border-purple-500 outline-none resize-none transition-colors text-gray-900 dark:text-white"
                                         disabled={mySubmission?.status === 'graded'}
                                     />
 
                                     {/* Current Submission File */}
                                     {mySubmission?.fileName && (
-                                        <div className="bg-white/5 border border-white/10 p-3 rounded-lg flex items-center justify-between">
+                                        <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 rounded-lg flex items-center justify-between">
                                             <div className="flex items-center gap-2 overflow-hidden">
-                                                <FileText className="w-5 h-5 text-purple-400 flex-shrink-0" />
-                                                <span className="text-sm text-gray-200 truncate">{mySubmission.fileName}</span>
+                                                <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                                                <span className="text-sm text-gray-800 dark:text-gray-200 truncate">{mySubmission.fileName}</span>
                                             </div>
                                             <a 
                                                 href={`${API_BASE_URL}${mySubmission.fileUrl}`} 
@@ -204,7 +247,7 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                             />
                                             <label 
                                                 htmlFor="file-upload"
-                                                className="flex items-center justify-center gap-2 w-full py-2 border-2 border-dashed border-white/20 hover:border-purple-500/50 rounded-lg text-sm font-medium text-gray-400 hover:text-purple-300 transition-colors cursor-pointer bg-black/20 hover:bg-black/40"
+                                                className="flex items-center justify-center gap-2 w-full py-2 border-2 border-dashed border-gray-300 dark:border-white/20 hover:border-purple-500/50 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-300 transition-colors cursor-pointer bg-white dark:bg-black/20 hover:bg-gray-50 dark:hover:bg-black/40"
                                             >
                                                 <UploadCloud className="w-5 h-5" />
                                                 {selectedFile ? selectedFile.name : 'Attach a file'}
@@ -228,28 +271,28 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                             </div>
                         ) : (
                             // Teacher View
-                            <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg flex-1 overflow-y-auto">
-                                <h3 className="font-bold text-lg mb-4 flex items-center justify-between">
+                            <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-5 shadow-lg flex-1 overflow-y-auto">
+                                <h3 className="font-bold text-lg mb-4 flex items-center justify-between text-gray-900 dark:text-white">
                                     Student Work
-                                    <span className="text-sm font-normal text-gray-400">{allSubmissions.length} Turned in</span>
+                                    <span className="text-sm font-normal text-gray-500 dark:text-gray-400">{allSubmissions.length} Turned in</span>
                                 </h3>
                                 
                                 <div className="space-y-4">
                                     {allSubmissions.map(sub => (
-                                        <div key={sub._id} className="bg-black/30 p-3 rounded-lg border border-white/5">
+                                        <div key={sub._id} className="bg-white dark:bg-black/30 p-3 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm">
                                             <div className="flex justify-between items-center mb-2">
-                                                <span className="font-medium text-sm">{sub.studentId?.fullname}</span>
+                                                <span className="font-medium text-sm text-gray-900 dark:text-white">{sub.studentId?.fullname}</span>
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${sub.status === 'late' ? 'bg-orange-500/20 text-orange-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                                                     {sub.status === 'late' ? '⚠️ Late' : '✅ On Time'}
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-gray-400 mb-3 line-clamp-2">{sub.content || 'No text content provided'}</p>
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{sub.content || 'No text content provided'}</p>
                                             
                                             {sub.fileName && (
-                                                <div className="flex items-center justify-between bg-black/40 p-2 rounded border border-white/5 mb-3">
+                                                <div className="flex items-center justify-between bg-gray-50 dark:bg-black/40 p-2 rounded border border-gray-200 dark:border-white/5 mb-3">
                                                     <div className="flex items-center gap-2 overflow-hidden">
-                                                        <FileText className="w-4 h-4 text-purple-400 flex-shrink-0" />
-                                                        <span className="text-xs text-gray-300 truncate" title={sub.fileName}>{sub.fileName}</span>
+                                                        <FileText className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                                                        <span className="text-xs text-gray-700 dark:text-gray-300 truncate" title={sub.fileName}>{sub.fileName}</span>
                                                     </div>
                                                     <a 
                                                         href={`${API_BASE_URL}${sub.fileUrl}`} 
@@ -269,7 +312,7 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                                     defaultValue={sub.marksAwarded || ''}
                                                     placeholder=" / 100"
                                                     onBlur={(e) => handleGrade(sub._id, e.target.value)}
-                                                    className="w-20 bg-transparent border-b border-white/20 text-sm focus:border-purple-500 outline-none px-1 text-center"
+                                                    className="w-20 bg-transparent border-b border-gray-300 dark:border-white/20 text-sm focus:border-purple-500 outline-none px-1 text-center text-gray-900 dark:text-white"
                                                 />
                                                 <span className="text-xs text-gray-500">/ {task.maxMarks || 100}</span>
                                             </div>

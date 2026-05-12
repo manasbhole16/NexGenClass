@@ -22,13 +22,19 @@ const taskSchema = new mongoose.Schema({
         title: { type: String, required: true },
         completed: { type: Boolean, default: false }
     }],
+    rubric: [{
+        criterion: { type: String, trim: true },
+        points: { type: Number, default: 0 },
+        description: { type: String, trim: true }
+    }],
     maxMarks: { type: Number, default: 100 },
     taskType: { 
         type: String, 
         enum: ['assignment', 'material', 'announcement'], 
         default: 'assignment' 
     },
-    category: { type: String, trim: true }
+    category: { type: String, trim: true },
+    deadlineReminderSentAt: { type: Date }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Task", taskSchema);

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme {
   --font-sans: "Outfit", sans-serif;
   --color-primary: #8b5cf6;
@@ -9,9 +11,10 @@
 
 :root {
   font-family: var(--font-sans);
-  background-color: #030305;
-  /* Deep dark background */
-  color: #ffffff;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-[#030305] dark:text-white transition-colors duration-300;
 }
 
 @keyframes float {

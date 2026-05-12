@@ -13,6 +13,7 @@ const chatRoutes = require("./routes/chatRouter");
 const quizRoutes = require("./routes/quizRouter");
 const submissionRoutes = require("./routes/submissionRouter");
 const ChatMessage = require("./models/chatMessage-model");
+const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
 const app = express();
 const server = http.createServer(app);
@@ -21,8 +22,14 @@ const server = http.createServer(app);
 const ORIGIN = [
     "https://task-buddy-4xix.vercel.app",
     "https://task-buddy-4xix.vercel.app/",
+    "https://nex-gen-class.vercel.app",
+    "https://nex-gen-class.vercel.app/",
+    "https://nexgenback-gamma.vercel.app",
+    "https://nexgenback-gamma.vercel.app/",
     "http://localhost:5173",
-    "http://127.0.0.1:5173"
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174"
 ];
 
 // Socket.IO Setup
@@ -35,6 +42,7 @@ const io = new Server(server, {
 
 // Database Connection
 db.connectDB();
+// startTaskReminderJob(); // Disabled for Vercel Serverless compatibility
 
 // Global Middlewares
 app.use(cors({
@@ -129,7 +137,12 @@ io.on("connection", (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`NexGen Backend running on port ${PORT}`);
-});
+const PORT = process.env.PORT || 3001;
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    server.listen(PORT, () => {
+        console.log(`NexGen Backend running on port ${PORT}`);
+    });
+}
+
+// Export the Express API for Vercel Serverless Functions
+module.exports = app;
