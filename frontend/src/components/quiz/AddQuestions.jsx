@@ -11,12 +11,12 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
     const [aiLoading, setAiLoading] = useState(false);
     const [aiError, setAiError] = useState(null);
     const [questions, setQuestions] = useState([
-        { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1, difficulty: 'medium', explanation: '' }
+        { type: 'mcq', questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, referenceAnswer: '', marks: 1, difficulty: 'medium', explanation: '' }
     ]);
     const [isPublished, setIsPublished] = useState(quiz.isPublished);
 
     const handleAddQuestion = () => {
-        setQuestions([...questions, { questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, marks: 1, difficulty: 'medium', explanation: '' }]);
+        setQuestions([...questions, { type: 'mcq', questionText: '', options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correctAnswer: 0, referenceAnswer: '', marks: 1, difficulty: 'medium', explanation: '' }]);
     };
 
     const handleRemoveQuestion = (idx) => {
@@ -28,6 +28,21 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
     const handleChange = (idx, field, val) => {
         const newQs = [...questions];
         newQs[idx][field] = val;
+        
+        // Auto-configure options when changing type
+        if (field === 'type') {
+            if (val === 'true_false') {
+                newQs[idx].options = [{ text: 'True' }, { text: 'False' }];
+                newQs[idx].correctAnswer = 0;
+            } else if (val === 'mcq') {
+                newQs[idx].options = [{ text: '' }, { text: '' }, { text: '' }, { text: '' }];
+                newQs[idx].correctAnswer = 0;
+            } else if (val === 'short_answer') {
+                newQs[idx].options = [];
+                newQs[idx].correctAnswer = null;
+            }
+        }
+        
         setQuestions(newQs);
     };
 
@@ -62,9 +77,11 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
             const data = await res.json();
             if (data.success) {
                 const nextQuestions = data.questions.map((q) => ({
+                    type: q.type || 'mcq',
                     questionText: q.questionText || '',
                     options: Array.isArray(q.options) ? q.options : [{ text: '' }, { text: '' }, { text: '' }, { text: '' }],
                     correctAnswer: Number.isFinite(Number(q.correctAnswer)) ? Number(q.correctAnswer) : 0,
+                    referenceAnswer: q.referenceAnswer || '',
                     marks: Number.isFinite(Number(q.marks)) ? Number(q.marks) : 1,
                     difficulty: q.difficulty || 'medium',
                     explanation: q.explanation || ''
@@ -195,7 +212,18 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                         </button>
                         
                         <div className="mb-4 pr-8">
-                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Question {qIdx + 1}</label>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-xs text-gray-400 uppercase tracking-wider font-bold">Question {qIdx + 1}</label>
+                                <select 
+                                    value={q.type || 'mcq'}
+                                    onChange={e => handleChange(qIdx, 'type', e.target.value)}
+                                    className="bg-transparent text-xs text-pink-500 font-bold outline-none cursor-pointer"
+                                >
+                                    <option value="mcq">Multiple Choice</option>
+                                    <option value="true_false">True / False</option>
+                                    <option value="short_answer">Short Answer</option>
+                                </select>
+                            </div>
                             <input
                                 type="text"
                                 value={q.questionText}
@@ -231,24 +259,37 @@ const AddQuestions = ({ quiz, onBack, onSuccess }) => {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            {q.options.map((opt, optIdx) => (
+                            {q.type !== 'short_answer' && q.options.map((opt, optIdx) => (
                                 <div key={optIdx} className={`flex items-center gap-3 p-2 rounded-xl border ${q.correctAnswer === optIdx ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/5' : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5'}`}>
                                     <button
                                         onClick={() => handleChange(qIdx, 'correctAnswer', optIdx)}
-                                        className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${q.correctAnswer === optIdx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 hover:border-gray-400'}`}
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all shrink-0 ${q.correctAnswer === optIdx ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-500 hover:border-gray-400'}`}
                                     >
                                         {q.correctAnswer === optIdx && <CheckCircle2 className="w-4 h-4" />}
                                     </button>
                                     <input
                                         type="text"
                                         value={opt.text}
+                                        disabled={q.type === 'true_false'}
                                         onChange={e => handleOptionChange(qIdx, optIdx, e.target.value)}
-                                        className="w-full bg-transparent outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
+                                        className="w-full bg-transparent outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 disabled:opacity-70 disabled:cursor-not-allowed"
                                         placeholder={`Option ${optIdx + 1}`}
                                     />
                                 </div>
                             ))}
                         </div>
+
+                        {q.type === 'short_answer' && (
+                            <div className="mt-4">
+                                <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Reference Answer (For grading)</label>
+                                <textarea
+                                    value={q.referenceAnswer || ''}
+                                    onChange={e => handleChange(qIdx, 'referenceAnswer', e.target.value)}
+                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-16 resize-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600"
+                                    placeholder="Enter keywords or example answer..."
+                                />
+                            </div>
+                        )}
 
                         <div className="mt-4">
                             <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Answer explanation</label>
