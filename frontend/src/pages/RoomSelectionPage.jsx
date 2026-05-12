@@ -91,12 +91,21 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <button onClick={() => setIsJoinModalOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-white/10 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-sm font-medium">
-                        <Plus className="w-4 h-4" /> Join Class
-                    </button>
-                    {user?.role === 'teacher' && (
-                        <button onClick={() => setIsCreateModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg font-bold hover:bg-purple-700 transition-all text-sm">
-                            <Plus className="w-4 h-4" /> Create Class
+                    {user?.role === 'teacher' ? (
+                        <div className="relative group">
+                            <button className="p-2 bg-gray-100 dark:bg-white/5 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-gray-600 dark:text-gray-400 focus:outline-none">
+                                <Plus className="w-5 h-5" />
+                            </button>
+                            <div className="absolute right-0 top-full pt-2 w-40 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden py-1">
+                                    <button onClick={() => setIsJoinModalOpen(true)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors font-medium">Join class</button>
+                                    <button onClick={() => setIsCreateModalOpen(true)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors font-medium">Create class</button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <button onClick={() => setIsJoinModalOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-white/10 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-sm font-medium">
+                            <Plus className="w-4 h-4" /> Join Class
                         </button>
                     )}
                     <div className="relative">

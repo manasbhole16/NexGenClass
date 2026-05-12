@@ -24,6 +24,8 @@ const ORIGIN = [
     "https://task-buddy-4xix.vercel.app/",
     "https://nex-gen-class.vercel.app",
     "https://nex-gen-class.vercel.app/",
+    "https://nexgenback-gamma.vercel.app",
+    "https://nexgenback-gamma.vercel.app/",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:5174",
