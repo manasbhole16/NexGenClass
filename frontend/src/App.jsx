@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import RoomSelectionPage from './pages/RoomSelectionPage'
 import GlobalCalendarPage from './pages/GlobalCalendarPage'
+import AttendancePage from './pages/AttendancePage'
 import AppLayout from './components/layout/AppLayout'
 
 import API_BASE_URL from './apiConfig'
@@ -58,6 +59,7 @@ const App = () => {
           <Route path="/rooms" element={user ? <AppLayout user={user} onLogout={handleLogout}><RoomSelectionPage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
           <Route path="/room/:roomId" element={user ? <AppLayout user={user} onLogout={handleLogout}><HomePage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
           <Route path="/calendar" element={user ? <AppLayout user={user} onLogout={handleLogout}><GlobalCalendarPage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
+          <Route path="/attendance" element={user ? <AppLayout user={user} onLogout={handleLogout}><AttendancePage user={user} /></AppLayout> : <Navigate to="/" />} />
         </Routes>
       </div>
     </BrowserRouter>

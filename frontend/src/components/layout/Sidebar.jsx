@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, BookOpen, ChevronDown, ChevronRight, GraduationCap } from 'lucide-react';
+import { Home, Calendar, CheckSquare, BookOpen, ChevronDown, ChevronRight, GraduationCap, ClipboardCheck } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
 import ThemeToggle from '../ThemeToggle';
 
@@ -31,6 +31,7 @@ const Sidebar = ({ user }) => {
         { name: 'Home', icon: Home, path: '/rooms' },
         { name: 'Calendar', icon: Calendar, path: '/calendar' },
         { name: 'To-do', icon: CheckSquare, path: '/room/personal' },
+        { name: 'Attendance', icon: ClipboardCheck, path: '/attendance' },
     ];
 
     return (
