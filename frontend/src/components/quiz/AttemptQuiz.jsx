@@ -52,12 +52,12 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         submitQuizData();
     };
 
-    const handleAnswerChange = (questionId, field, val) => {
+    const handleSelectOption = (questionId, optionIdx) => {
         const existing = answers.find(a => a.questionId === questionId);
         if (existing) {
-            setAnswers(answers.map(a => a.questionId === questionId ? { ...a, [field]: val } : a));
+            setAnswers(answers.map(a => a.questionId === questionId ? { ...a, selectedOption: optionIdx } : a));
         } else {
-            setAnswers([...answers, { questionId, [field]: val }]);
+            setAnswers([...answers, { questionId, selectedOption: optionIdx }]);
         }
     };
 
@@ -135,33 +135,17 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                         </div>
 
                         <div className="space-y-3">
-                            {q.type === 'short_answer' ? (
-                                <textarea
-                                    value={answers.find(a => a.questionId === q._id)?.textAnswer || ''}
-                                    onChange={e => handleAnswerChange(q._id, 'textAnswer', e.target.value)}
-                                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none text-gray-900 dark:text-white placeholder-gray-400 min-h-[120px] resize-y"
-                                    placeholder="Type your answer here..."
-                                />
-                            ) : (
-                                q.options.map((opt, optIdx) => {
-                                    const isSelected = answers.find(a => a.questionId === q._id)?.selectedOption === optIdx;
-                                    return (
-                                        <label key={optIdx} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-pink-500 bg-pink-50 dark:bg-pink-500/10' : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-gray-400 dark:hover:border-white/30'}`}>
-                                            <input 
-                                                type="radio" 
-                                                name={`question-${q._id}`} 
-                                                className="hidden" 
-                                                checked={isSelected}
-                                                onChange={() => handleAnswerChange(q._id, 'selectedOption', optIdx)} 
-                                            />
-                                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-pink-500' : 'border-gray-400 dark:border-gray-500'}`}>
-                                                {isSelected && <div className="w-2.5 h-2.5 bg-pink-500 rounded-full" />}
-                                            </div>
-                                            <span className="text-gray-800 dark:text-gray-300 select-none text-sm md:text-base">{opt.text}</span>
-                                        </label>
-                                    );
-                                })
-                            )}
+                            {q.options.map((opt, optIdx) => {
+                                const isSelected = answers.find(a => a.questionId === q._id)?.selectedOption === optIdx;
+                                return (
+                                    <label key={optIdx} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-pink-500 bg-pink-50 dark:bg-pink-500/10' : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:border-gray-400 dark:hover:border-white/30'}`}>
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-pink-500' : 'border-gray-400 dark:border-gray-500'}`}>
+                                            {isSelected && <div className="w-2.5 h-2.5 bg-pink-500 rounded-full" />}
+                                        </div>
+                                        <span className="text-gray-800 dark:text-gray-300 select-none text-sm md:text-base">{opt.text}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}

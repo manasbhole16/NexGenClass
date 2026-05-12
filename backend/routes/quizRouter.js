@@ -15,6 +15,5 @@ router.get('/:id', quizController.getQuizDetails);
 router.post('/:id/attempt', quizController.attemptQuiz);
 router.get('/:id/result/:studentId', quizController.getStudentResult);
 router.get('/:id/results', quizController.getQuizResults);
-router.post('/:id/evaluate/:attemptId', quizController.evaluateAttempt);
 
 module.exports = router;

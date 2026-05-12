@@ -54,7 +54,7 @@ const HomePage = ({ user, onLogout }) => {
     const [showSettings, setShowSettings] = useState(false)
     const [socket, setSocket] = useState(null)
     const [isChatOpen, setIsChatOpen] = useState(false)
-    const [activeTab, setActiveTab] = useState('stream') // 'stream', 'classwork', 'quizzes', 'people'
+    const [activeTab, setActiveTab] = useState('stream') // 'stream', 'classwork', 'people'
     const [classworkView, setClassworkView] = useState('list') // 'list', 'kanban'
     const [showProfileInfo, setShowProfileInfo] = useState(false)
     const navigate = useNavigate()
@@ -257,12 +257,6 @@ const HomePage = ({ user, onLogout }) => {
                     >
                         Classwork
                     </button>
-                    <button 
-                        onClick={() => setActiveTab('quizzes')}
-                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'quizzes' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'}`}
-                    >
-                        Quizzes
-                    </button>
                     {!isPersonal && (
                         <button 
                             onClick={() => setActiveTab('people')}
@@ -423,12 +417,6 @@ const HomePage = ({ user, onLogout }) => {
                             <DragOverlay>{activeId ? <TaskCard task={tasks.find(t => t._id === activeId)} /> : null}</DragOverlay>
                         </DndContext>
                     )}
-                </div>
-            )}
-
-            {activeTab === 'quizzes' && (
-                <div className="max-w-5xl mx-auto">
-                    <QuizModule roomId={isPersonal ? 'personal' : roomId} user={user} />
                 </div>
             )}
 
