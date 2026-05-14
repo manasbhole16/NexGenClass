@@ -13,6 +13,8 @@ import PresenceAvatars from '../components/board/PresenceAvatars'
 import RoomChat from '../components/board/RoomChat'
 import CalendarView from '../components/board/CalendarView'
 import QuizModule from '../components/quiz/QuizModule'
+import TeacherDashboardHeader from '../components/board/TeacherDashboardHeader'
+import ClassroomAnalytics from '../components/analytics/ClassroomAnalytics'
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -271,6 +273,12 @@ const HomePage = ({ user, onLogout }) => {
                             People
                         </button>
                     )}
+                    <button 
+                        onClick={() => setActiveTab('analytics')}
+                        className={`pb-3 text-sm font-medium transition-all border-b-2 ${activeTab === 'analytics' ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'}`}
+                    >
+                        Analytics
+                    </button>
                 </div>
             </header>
 
@@ -322,6 +330,11 @@ const HomePage = ({ user, onLogout }) => {
                         <h1 className="text-3xl md:text-4xl font-bold text-white relative z-10">{roomDetails?.name || 'Classroom'}</h1>
                         <p className="text-purple-200 mt-2 relative z-10">{roomDetails?.owner === user?._id ? 'You are the instructor' : 'Instructor view'}</p>
                     </div>
+
+                    {/* Antigravity Teacher Header */}
+                    {roomDetails?.owner === user?._id && (
+                        <TeacherDashboardHeader tasks={tasks} roomId={roomId} roomDetails={roomDetails} />
+                    )}
 
                     {/* Announce Box */}
                     {roomDetails?.owner === user?._id && (
@@ -462,6 +475,12 @@ const HomePage = ({ user, onLogout }) => {
                             ))}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'analytics' && (
+                <div className="max-w-4xl mx-auto">
+                    <ClassroomAnalytics roomId={roomId} />
                 </div>
             )}
         </div>

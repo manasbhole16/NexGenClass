@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Plus, Users, ArrowRight, BookOpen, Loader, LogOut, Lock, MoreVertical, FileText, Bell, UserCircle2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import API_BASE_URL from '../apiConfig'
+import StudentGlobalAnalytics from '../components/analytics/StudentGlobalAnalytics'
 
 const RoomSelectionPage = ({ user, onLogout }) => {
     const [rooms, setRooms] = useState([])
@@ -13,6 +14,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
     const [loading, setLoading] = useState(false)
     const [showProfileInfo, setShowProfileInfo] = useState(false)
     const [activeDropdown, setActiveDropdown] = useState(null)
+    const [activeTab, setActiveTab] = useState('classes')
     const navigate = useNavigate()
 
     const isValidCode = joinCode.length >= 5 && joinCode.length <= 8 && /^[a-zA-Z0-9]+$/.test(joinCode);
@@ -81,6 +83,27 @@ const RoomSelectionPage = ({ user, onLogout }) => {
         setLoading(false)
     }
 
+    const handleUnenroll = async (roomId) => {
+        if (!window.confirm("Are you sure you want to unenroll from this class?")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/rooms/unenroll`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ roomId }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                setRooms(rooms.filter(r => r._id !== roomId));
+                setActiveDropdown(null);
+            } else {
+                alert(data.message);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     return (
         <div className="min-h-screen p-4 md:p-8">
             <header className="flex justify-between items-center mb-10 border-b border-gray-200 dark:border-white/5 pb-4">
@@ -138,6 +161,24 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                 </div>
             </header>
 
+            {user?.role !== 'teacher' && (
+                <div className="flex items-center gap-6 mb-8 border-b border-gray-200 dark:border-white/5 px-2">
+                    <button 
+                        onClick={() => setActiveTab('classes')}
+                        className={`pb-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'classes' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                    >
+                        My Classes
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('analytics')}
+                        className={`pb-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'analytics' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}
+                    >
+                        Global Analytics
+                    </button>
+                </div>
+            )}
+
+            {activeTab === 'classes' || user?.role === 'teacher' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {rooms.map(room => (
                     <motion.div key={room._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -5 }} className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group relative flex flex-col h-72">
@@ -167,7 +208,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                                                     <button className="w-full text-left px-4 py-2 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">Delete Class</button>
                                                 </>
                                             ) : (
-                                                <button className="w-full text-left px-4 py-2 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">Unenroll</button>
+                                                <button onClick={() => handleUnenroll(room._id)} className="w-full text-left px-4 py-2 text-sm text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">Unenroll</button>
                                             )}
                                         </div>
                                     )}
@@ -200,6 +241,9 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                     </motion.div>
                 ))}
             </div>
+            ) : (
+                <StudentGlobalAnalytics rooms={rooms} />
+            )}
 
             {/* Google Classroom Style Join Modal */}
             {isJoinModalOpen && (

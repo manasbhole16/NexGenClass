@@ -303,3 +303,21 @@ module.exports.generateQuizQuestions = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// Get all attempts for a student
+module.exports.getStudentAttempts = async (req, res) => {
+    try {
+        const { roomId } = req.query;
+        let query = { studentId: req.user._id };
+        if (roomId && roomId !== 'all') {
+            query.roomId = roomId;
+        }
+        const attempts = await Attempt.find(query)
+            .populate('quizId', 'title totalMarks deadline')
+            .populate('roomId', 'name code')
+            .sort({ createdAt: -1 });
+        res.json({ success: true, attempts });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

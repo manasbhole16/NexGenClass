@@ -11,6 +11,7 @@ router.post('/create', quizController.createQuiz);
 router.post('/:id/questions', quizController.addQuestions);
 router.post('/:id/publish', quizController.publishQuiz);
 router.get('/room/:roomId', quizController.getQuizzesByRoom);
+router.get('/attempts/me', quizController.getStudentAttempts);
 router.get('/:id', quizController.getQuizDetails);
 router.post('/:id/attempt', quizController.attemptQuiz);
 router.get('/:id/result/:studentId', quizController.getStudentResult);

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { createRoom, joinRoom, getUserRooms, deleteRoom, kickMember } = require("../controllers/roomController");
+const { createRoom, joinRoom, getUserRooms, deleteRoom, kickMember, unenrollRoom } = require("../controllers/roomController");
 const { protect } = require("../middleware/authMiddleware");
 
 router.use(protect);
@@ -10,5 +10,6 @@ router.post("/join", joinRoom);
 router.get("/my-rooms", getUserRooms);
 router.delete("/delete/:roomId", deleteRoom);
 router.post("/kick", kickMember);
+router.post("/unenroll", unenrollRoom);
 
 module.exports = router;

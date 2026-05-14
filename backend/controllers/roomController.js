@@ -94,3 +94,23 @@ module.exports.kickMember = async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 };
+
+// Unenroll from Room
+module.exports.unenrollRoom = async (req, res) => {
+    try {
+        const { roomId } = req.body;
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ message: "Room not found" });
+
+        if (room.owner.toString() === req.user._id.toString()) {
+            return res.status(400).json({ message: "Owner cannot unenroll from their own room. Delete it instead." });
+        }
+
+        room.members = room.members.filter(m => m.toString() !== req.user._id.toString());
+        await room.save();
+
+        res.json({ success: true, message: "Unenrolled successfully" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};

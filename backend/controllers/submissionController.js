@@ -49,7 +49,13 @@ module.exports.getSubmissionsForTask = async (req, res) => {
 module.exports.getStudentSubmissions = async (req, res) => {
     try {
         const { roomId } = req.query;
-        const submissions = await Submission.find({ studentId: req.user._id, roomId });
+        let query = { studentId: req.user._id };
+        if (roomId && roomId !== 'all') {
+            query.roomId = roomId;
+        }
+        const submissions = await Submission.find(query)
+            .populate('roomId', 'name code')
+            .populate('taskId', 'title maxMarks dueDate');
         res.json({ success: true, submissions });
     } catch (err) {
         res.status(500).json({ message: err.message });
