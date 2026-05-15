@@ -50,6 +50,8 @@ const HomePage = ({ user, onLogout }) => {
     const [activeId, setActiveId] = useState(null)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedAssignment, setSelectedAssignment] = useState(null)
+    const [isAnnouncing, setIsAnnouncing] = useState(false)
+    const [announcementText, setAnnouncementText] = useState('')
     const [onlineUsers, setOnlineUsers] = useState([])
     const [typingUser, setTypingUser] = useState(null)
     const [roomDetails, setRoomDetails] = useState(null)
@@ -343,32 +345,99 @@ const HomePage = ({ user, onLogout }) => {
 
                     {/* Announce Box */}
                     {roomDetails?.owner === user?._id && (
-                        <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-4 flex items-center gap-4 shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1f1f23] transition-colors" onClick={() => setIsModalOpen(true)}>
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-white">
-                                {user?.fullname?.[0]}
+                        isAnnouncing ? (
+                            <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-4 shadow-md flex flex-col gap-3">
+                                <textarea
+                                    value={announcementText}
+                                    onChange={(e) => setAnnouncementText(e.target.value)}
+                                    placeholder="Announce something to your class..."
+                                    className="w-full bg-transparent border-none focus:ring-0 outline-none resize-none text-gray-900 dark:text-white"
+                                    rows="3"
+                                    autoFocus
+                                />
+                                <div className="flex justify-end gap-2 border-t border-gray-100 dark:border-white/5 pt-3">
+                                    <button 
+                                        onClick={() => { setIsAnnouncing(false); setAnnouncementText(''); }} 
+                                        className="px-4 py-1.5 rounded-md text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        onClick={async () => {
+                                            if(!announcementText.trim()) return;
+                                            try {
+                                                const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        title: announcementText,
+                                                        description: '',
+                                                        roomId: roomDetails._id,
+                                                        taskType: 'announcement',
+                                                        maxMarks: 0,
+                                                        dueDate: null
+                                                    }),
+                                                    credentials: 'include'
+                                                });
+                                                if(res.ok) {
+                                                    setAnnouncementText('');
+                                                    setIsAnnouncing(false);
+                                                }
+                                            } catch(err) { console.error(err); }
+                                        }}
+                                        disabled={!announcementText.trim()}
+                                        className="px-4 py-1.5 rounded-md text-sm font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
+                                    >
+                                        Post
+                                    </button>
+                                </div>
                             </div>
-                            <span className="text-gray-500 dark:text-gray-400 flex-1">Announce something to your class</span>
-                        </div>
+                        ) : (
+                            <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-4 flex items-center gap-4 shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1f1f23] transition-colors" onClick={() => setIsAnnouncing(true)}>
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-white flex-shrink-0">
+                                    {user?.fullname?.[0] || 'T'}
+                                </div>
+                                <span className="text-gray-500 dark:text-gray-400 flex-1">Announce something to your class</span>
+                            </div>
+                        )
                     )}
 
                     {/* Stream Items (Assignments/Announcements) */}
                     <div className="space-y-4">
                         {tasks.map(task => (
-                            <div 
-                                key={task._id} 
-                                onClick={() => setSelectedAssignment(task)}
-                                className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-5 hover:bg-gray-50 dark:hover:bg-[#1f1f23] transition-colors shadow-md flex gap-4 cursor-pointer"
-                            >
-                                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                                    <ClipboardList className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                            task.taskType === 'announcement' ? (
+                                <div 
+                                    key={task._id} 
+                                    className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm"
+                                >
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-white flex-shrink-0">
+                                            {roomDetails?.owner === user?._id ? (user?.fullname?.[0] || 'T') : 'T'}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-gray-900 dark:text-white">Teacher</p>
+                                            <p className="text-xs text-gray-500">{new Date(task.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{task.title}</p>
                                 </div>
-                                <div>
-                                    <p className="text-gray-700 dark:text-gray-300">
-                                        <span className="font-semibold text-gray-900 dark:text-white">Teacher</span> posted a new {task.taskType || 'assignment'}: <span className="font-medium text-gray-900 dark:text-white">{task.title}</span>
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">{new Date(task.createdAt).toLocaleDateString()}</p>
+                            ) : (
+                                <div 
+                                    key={task._id} 
+                                    onClick={() => setSelectedAssignment(task)}
+                                    className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-5 hover:bg-gray-50 dark:hover:bg-[#1f1f23] transition-colors shadow-md flex gap-4 cursor-pointer"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                                        <ClipboardList className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-gray-700 dark:text-gray-300">
+                                            <span className="font-semibold text-gray-900 dark:text-white">Teacher</span> posted a new {task.taskType || 'assignment'}: <span className="font-medium text-gray-900 dark:text-white">{task.title}</span>
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">{new Date(task.createdAt).toLocaleDateString()}</p>
+                                    </div>
                                 </div>
-                            </div>
+                            )
                         ))}
                         {tasks.length === 0 && (
                             <div className="text-center py-10 text-gray-500">

@@ -15,6 +15,12 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
     const isTeacher = hasRoomContext && roomDetails?.owner === user?._id;
 
     useEffect(() => {
+        setMySubmission(null);
+        setAllSubmissions([]);
+        setSubmissionContent('');
+        setSelectedFile(null);
+        setMessage(null);
+
         if (isOpen && task && hasRoomContext) {
             if (isTeacher) {
                 fetchSubmissions();
@@ -40,7 +46,10 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
             const res = await fetch(`${API_BASE_URL}/api/submissions/me?roomId=${roomDetails._id}`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                const submission = data.submissions.find(s => s.taskId === task._id);
+                const submission = data.submissions.find(s => {
+                    const sTaskId = s.taskId?._id || s.taskId;
+                    return String(sTaskId) === String(task._id);
+                });
                 if (submission) {
                     setMySubmission(submission);
                     setSubmissionContent(submission.content || '');
@@ -94,12 +103,12 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
         setLoading(false);
     };
 
-    const handleGrade = async (submissionId, marks) => {
+    const handleGrade = async (submissionId, marks, feedback) => {
         try {
             await fetch(`${API_BASE_URL}/api/submissions/${submissionId}/grade`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ marksAwarded: Number(marks) }),
+                body: JSON.stringify({ grade: marks, feedback }),
                 credentials: 'include'
             });
             fetchSubmissions(); // Refresh
@@ -289,8 +298,17 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                         </div>
                                     )}
                                     {mySubmission?.status === 'graded' ? (
-                                        <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg text-center">
-                                            <p className="text-sm font-medium text-purple-300">Grade: {mySubmission.marksAwarded} / {task.maxMarks || 100}</p>
+                                        <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Grade:</span>
+                                                <span className="text-lg font-bold text-purple-600 dark:text-purple-400">{mySubmission.grade || mySubmission.marksAwarded} / {task.maxMarks || 100}</span>
+                                            </div>
+                                            {(mySubmission.feedback || mySubmission.teacherFeedback) && (
+                                                <div className="pt-2 border-t border-purple-500/20">
+                                                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 block mb-1">Teacher Feedback:</span>
+                                                    <p className="text-sm text-gray-700 dark:text-gray-300 italic">{mySubmission.feedback || mySubmission.teacherFeedback}</p>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <button 
@@ -340,16 +358,27 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                                                 </div>
                                             )}
 
-                                            <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="number"
-                                                    defaultValue={sub.marksAwarded || ''}
-                                                    placeholder=" / 100"
-                                                    onBlur={(e) => handleGrade(sub._id, e.target.value)}
-                                                    className="w-20 bg-transparent border-b border-gray-300 dark:border-white/20 text-sm focus:border-purple-500 outline-none px-1 text-center text-gray-900 dark:text-white"
+                                            <form onSubmit={(e) => { e.preventDefault(); handleGrade(sub._id, e.target.marks.value, e.target.feedback.value); }} className="flex flex-col gap-2 mt-2">
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        name="marks"
+                                                        type="text"
+                                                        defaultValue={sub.grade || sub.marksAwarded || ''}
+                                                        placeholder={`Grade / ${task.maxMarks || 100}`}
+                                                        className="w-full bg-transparent border border-gray-300 dark:border-white/20 rounded px-2 py-1.5 text-sm focus:border-purple-500 outline-none text-gray-900 dark:text-white"
+                                                    />
+                                                </div>
+                                                <textarea
+                                                    name="feedback"
+                                                    defaultValue={sub.feedback || sub.teacherFeedback || ''}
+                                                    placeholder="Add optional feedback..."
+                                                    className="w-full bg-transparent border border-gray-300 dark:border-white/20 rounded px-2 py-1.5 text-sm focus:border-purple-500 outline-none text-gray-900 dark:text-white resize-none"
+                                                    rows="2"
                                                 />
-                                                <span className="text-xs text-gray-500">/ {task.maxMarks || 100}</span>
-                                            </div>
+                                                <button type="submit" className="text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 px-3 rounded self-end transition-colors shadow-sm">
+                                                    Save Grade
+                                                </button>
+                                            </form>
                                         </div>
                                     ))}
                                     {allSubmissions.length === 0 && (

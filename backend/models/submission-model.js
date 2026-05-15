@@ -13,7 +13,11 @@ const submissionSchema = new mongoose.Schema({
     fileUrl: { type: String }, // Path to the uploaded file
     fileName: { type: String }, // Original file name
     marksAwarded: { type: Number, default: null },
-    teacherFeedback: { type: String }
+    teacherFeedback: { type: String },
+    grade: { type: String },
+    feedback: { type: String },
+    gradedAt: { type: Date },
+    gradedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 // Ensure a student can only submit once per task

@@ -66,11 +66,22 @@ module.exports.getStudentSubmissions = async (req, res) => {
 module.exports.gradeSubmission = async (req, res) => {
     try {
         const { id } = req.params;
-        const { marksAwarded, teacherFeedback } = req.body;
+        const { marksAwarded, teacherFeedback, grade, feedback } = req.body;
+
+        const finalGrade = grade || marksAwarded;
+        const finalFeedback = feedback || teacherFeedback;
 
         const submission = await Submission.findByIdAndUpdate(
             id,
-            { marksAwarded, teacherFeedback, status: 'graded' },
+            { 
+                marksAwarded: finalGrade, 
+                teacherFeedback: finalFeedback, 
+                grade: finalGrade, 
+                feedback: finalFeedback, 
+                status: 'graded',
+                gradedAt: new Date(),
+                gradedBy: req.user._id
+            },
             { new: true }
         );
 
