@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../../apiConfig';
-import { Loader, Plus, BookOpen, Clock, Brain, CheckCircle2, ChevronRight, Share2, Play } from 'lucide-react';
+import { Loader, Plus, BookOpen, Clock, Brain, CheckCircle2, ChevronRight, Share2, Play, Trash2 } from 'lucide-react';
 import CreateQuiz from './CreateQuiz';
 import AddQuestions from './AddQuestions';
 import AttemptQuiz from './AttemptQuiz';
@@ -117,11 +117,24 @@ const QuizModule = ({ roomId, user }) => {
                                             >
                                                 Edit Qs
                                             </button>
+                                            <button 
+                                                onClick={async () => {
+                                                    if(window.confirm('Are you sure you want to delete this quiz?')) {
+                                                        try {
+                                                            const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}`, { method: 'DELETE', credentials: 'include' });
+                                                            if(res.ok) fetchQuizzes();
+                                                        } catch(err) { console.error(err); }
+                                                    }
+                                                }}
+                                                className="px-3 py-2 bg-red-100 dark:bg-red-500/10 hover:bg-red-200 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded-lg transition-all"
+                                                title="Delete Quiz"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     ) : (
                                         <button 
-                                            onClick={() => { setSelectedQuiz(quiz); setView(quiz.hasAttempted ? 'results' : 'attempt'); }}
-                                            disabled={quiz.hasAttempted} // Disable if they just want to see it, OR let them see results
+                                            onClick={() => { setSelectedQuiz(quiz); setView(quiz.hasAttempted ? 'student-result' : 'attempt'); }}
                                             className={`w-full py-2 flex items-center justify-center gap-2 rounded-lg text-sm font-bold transition-all ${
                                                 quiz.hasAttempted 
                                                 ? 'bg-gray-50 dark:bg-white/5 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10' 

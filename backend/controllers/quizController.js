@@ -82,6 +82,26 @@ module.exports.publishQuiz = async (req, res) => {
     }
 };
 
+// Delete Quiz
+module.exports.deleteQuiz = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can delete quizzes." });
+
+        const { id } = req.params;
+        const quiz = await Quiz.findById(id);
+        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+        if (quiz.createdBy.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Not authorized to modify this quiz." });
+
+        await Quiz.findByIdAndDelete(id);
+        await Question.deleteMany({ quizId: id });
+        await Attempt.deleteMany({ quizId: id });
+
+        res.json({ success: true, message: "Quiz deleted successfully." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // Get Quizzes by Room
 module.exports.getQuizzesByRoom = async (req, res) => {
     try {
