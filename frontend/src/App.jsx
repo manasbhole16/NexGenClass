@@ -11,9 +11,20 @@ import AppLayout from './components/layout/AppLayout'
 
 import API_BASE_URL from './apiConfig'
 
+const ProtectedRoute = ({ user, authChecked, children }) => {
+  if (!authChecked) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
+  return user ? children : <Navigate to="/" />
+}
+
+const PublicRoute = ({ user, children }) => {
+  return user ? <Navigate to="/rooms" /> : children
+}
+
 const App = () => {
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [authChecked, setAuthChecked] = useState(false)
 
   // Persist Auth
   useEffect(() => {
@@ -25,9 +36,9 @@ const App = () => {
           setUser(data.user)
         }
       } catch (err) {
-        console.log("Not logged in")
+        console.log('Not logged in')
       } finally {
-        setLoading(false)
+        setAuthChecked(true)
       }
     }
     checkAuth()
@@ -38,28 +49,25 @@ const App = () => {
       await fetch(`${API_BASE_URL}/api/auth/logout`, { credentials: 'include' })
       setUser(null)
     } catch (err) {
-      console.error("Logout failed", err)
-      // Fallback: clear state anyway
+      console.error('Logout failed', err)
       setUser(null)
     }
   }
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>
 
   return (
     <BrowserRouter>
       <div className="min-h-screen overflow-hidden selection:bg-purple-500/30">
         <Routes>
-          <Route path="/" element={user ? <Navigate to="/rooms" /> : <WelcomePage />} />
-          <Route path="/login" element={!user ? <LoginPage onLogin={setUser} /> : <Navigate to="/rooms" />} />
-          <Route path="/signup" element={!user ? <SignupPage onSignup={setUser} /> : <Navigate to="/rooms" />} />
+          <Route path="/" element={<PublicRoute user={user}><WelcomePage /></PublicRoute>} />
+          <Route path="/login" element={<PublicRoute user={user}><LoginPage onLogin={setUser} /></PublicRoute>} />
+          <Route path="/signup" element={<PublicRoute user={user}><SignupPage onSignup={setUser} /></PublicRoute>} />
           <Route path="/todo" element={user ? <Navigate to="/room/personal" /> : <Navigate to="/" />} />
-          
+
           {/* Authenticated Routes wrapped in Layout */}
-          <Route path="/rooms" element={user ? <AppLayout user={user} onLogout={handleLogout}><RoomSelectionPage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
-          <Route path="/room/:roomId" element={user ? <AppLayout user={user} onLogout={handleLogout}><HomePage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
-          <Route path="/calendar" element={user ? <AppLayout user={user} onLogout={handleLogout}><GlobalCalendarPage user={user} onLogout={handleLogout} /></AppLayout> : <Navigate to="/" />} />
-          <Route path="/attendance" element={user ? <AppLayout user={user} onLogout={handleLogout}><AttendancePage user={user} /></AppLayout> : <Navigate to="/" />} />
+          <Route path="/rooms" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><RoomSelectionPage user={user} onLogout={handleLogout} /></AppLayout></ProtectedRoute>} />
+          <Route path="/room/:roomId" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><HomePage user={user} onLogout={handleLogout} /></AppLayout></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><GlobalCalendarPage user={user} onLogout={handleLogout} /></AppLayout></ProtectedRoute>} />
+          <Route path="/attendance" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><AttendancePage user={user} /></AppLayout></ProtectedRoute>} />
         </Routes>
       </div>
     </BrowserRouter>
