@@ -41,9 +41,16 @@ const io = new Server(server, {
     }
 });
 
-// Database Connection
-const dbReady = db.connectDB();
-// startTaskReminderJob(); // Disabled for Vercel Serverless compatibility
+// Database Connection Middleware for Serverless
+app.use(async (req, res, next) => {
+    try {
+        await db.connectDB();
+        next();
+    } catch (error) {
+        console.error("Database connection failed before request:", error.message || error);
+        res.status(503).json({ error: "Database connection failed. Please try again later.", details: error.message });
+    }
+});
 
 // Global Middlewares
 app.use(cors({
@@ -55,17 +62,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Ensure DB is connected before handling requests
-app.use(async (req, res, next) => {
-    try {
-        await dbReady;
-        next();
-    } catch (error) {
-        console.error("Database connection failed before request:", error.message || error);
-        res.status(500).json({ message: "Database connection failed. Please try again later." });
-    }
-});
 
 // Inject IO into requests
 app.use((req, res, next) => {

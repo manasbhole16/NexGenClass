@@ -1,42 +1,53 @@
 const mongoose = require("mongoose");
-let isConnected = false;
+
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
 
 const connectDB = async () => {
-    const mongoUri = process.env.MONGO_URI;
-    if (!mongoUri) {
-        throw new Error("MONGO_URI is not defined. Set the database URI in your environment variables.");
+    if (cached.conn) {
+        return cached.conn;
     }
 
-    if (isConnected || mongoose.connection.readyState === 1) {
-        return mongoose.connection;
-    }
-
-    mongoose.set("strictQuery", false);
-    mongoose.set("bufferCommands", false);
-
-    await mongoose.connect(mongoUri, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        serverSelectionTimeoutMS: 10000,
-    });
-
-    isConnected = true;
-    console.log("Connected to MongoDB");
-
-    // FORCED FIX FOR phone_1 DUPLICATE KEY ERROR
-    try {
-        const User = require("../models/user-model");
-        await User.collection.dropIndex('phone_1');
-        console.log("Successfully dropped the ghost 'phone_1' index.");
-    } catch (indexErr) {
-        if (indexErr.code === 27) {
-            console.log("Note: 'phone_1' index not found (already removed).");
-        } else {
-            console.log("Index drop status:", indexErr.message);
+    if (!cached.promise) {
+        const mongoUri = process.env.MONGO_URI;
+        if (!mongoUri) {
+            throw new Error("MONGO_URI is not defined. Set the database URI in your environment variables.");
         }
+
+        const opts = {
+            bufferCommands: false,
+            serverSelectionTimeoutMS: 5000, // Fail fast if no connection
+        };
+
+        cached.promise = mongoose.connect(mongoUri, opts).then((mongoose) => {
+            console.log("Connected to MongoDB (Cached for Serverless)");
+            
+            // FORCED FIX FOR phone_1 DUPLICATE KEY ERROR
+            try {
+                const User = require("../models/user-model");
+                // Direct drop of the problematic index
+                User.collection.dropIndex('phone_1').catch(() => {});
+            } catch (err) {}
+
+            return mongoose;
+        }).catch(err => {
+            console.log("Error connecting to MongoDB:", err.message);
+            cached.promise = null;
+            throw err;
+        });
     }
 
-    return mongoose.connection;
+    try {
+        cached.conn = await cached.promise;
+    } catch (e) {
+        cached.promise = null;
+        throw e;
+    }
+
+    return cached.conn;
 };
 
 module.exports = { connectDB };
