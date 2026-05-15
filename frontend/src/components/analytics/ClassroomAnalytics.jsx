@@ -39,11 +39,21 @@ const ClassroomAnalytics = ({ roomId }) => {
     useEffect(() => {
         const fetchClassroomAnalytics = async () => {
             try {
+                const safeFetch = async (url) => {
+                    try {
+                        const res = await fetch(url, { credentials: 'include' });
+                        if (!res.ok) return { success: false };
+                        return await res.json();
+                    } catch (e) {
+                        return { success: false };
+                    }
+                };
+
                 const [attRes, subRes, taskRes, attemptRes] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/attendance/student`, { credentials: 'include' }).then(r => r.json()),
-                    fetch(`${API_BASE_URL}/api/submissions/me?roomId=${roomId}`, { credentials: 'include' }).then(r => r.json()),
-                    fetch(`${API_BASE_URL}/api/tasks?roomId=${roomId}`, { credentials: 'include' }).then(r => r.json()),
-                    fetch(`${API_BASE_URL}/api/quizzes/attempts/me?roomId=${roomId}`, { credentials: 'include' }).then(r => r.json())
+                    safeFetch(`${API_BASE_URL}/api/attendance/student`),
+                    safeFetch(`${API_BASE_URL}/api/submissions/me?roomId=${roomId}`),
+                    safeFetch(`${API_BASE_URL}/api/tasks?roomId=${roomId}`),
+                    safeFetch(`${API_BASE_URL}/api/quiz/attempts/me?roomId=${roomId}`)
                 ]);
 
                 // Attendance

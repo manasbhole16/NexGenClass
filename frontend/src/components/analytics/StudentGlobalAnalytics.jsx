@@ -47,11 +47,21 @@ const StudentGlobalAnalytics = ({ rooms = [] }) => {
         const fetchAnalytics = async () => {
             try {
                 // Fetch all required data in parallel
+                const safeFetch = async (url) => {
+                    try {
+                        const res = await fetch(url, { credentials: 'include' });
+                        if (!res.ok) return { success: false };
+                        return await res.json();
+                    } catch (e) {
+                        return { success: false };
+                    }
+                };
+
                 const [attRes, subRes, taskRes, attemptRes] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/attendance/student`, { credentials: 'include' }).then(r => r.json()),
-                    fetch(`${API_BASE_URL}/api/submissions/me?roomId=all`, { credentials: 'include' }).then(r => r.json()),
-                    fetch(`${API_BASE_URL}/api/tasks?roomId=all`, { credentials: 'include' }).then(r => r.json()),
-                    fetch(`${API_BASE_URL}/api/quizzes/attempts/me?roomId=all`, { credentials: 'include' }).then(r => r.json())
+                    safeFetch(`${API_BASE_URL}/api/attendance/student`),
+                    safeFetch(`${API_BASE_URL}/api/submissions/me?roomId=all`),
+                    safeFetch(`${API_BASE_URL}/api/tasks?roomId=all`),
+                    safeFetch(`${API_BASE_URL}/api/quiz/attempts/me?roomId=all`)
                 ]);
 
                 const attendanceData = attRes.success ? attRes : null;
@@ -73,8 +83,8 @@ const StudentGlobalAnalytics = ({ rooms = [] }) => {
                 let totalScore = 0;
                 let maxPossible = 0;
                 
-                submissions.filter(s => s.status === 'graded' && s.marksAwarded !== null).forEach(s => {
-                    totalScore += s.marksAwarded;
+                submissions.filter(s => s.status === 'graded' && (s.marksAwarded != null || s.grade != null)).forEach(s => {
+                    totalScore += Number(s.grade || s.marksAwarded);
                     maxPossible += (s.taskId?.maxMarks || 100);
                 });
 
@@ -123,7 +133,7 @@ const StudentGlobalAnalytics = ({ rooms = [] }) => {
     const historyData = [
         ...stats.submissions.filter(s => s.status === 'graded').map(s => ({
             date: new Date(s.updatedAt),
-            score: (s.marksAwarded / (s.taskId?.maxMarks || 100)) * 100,
+            score: (Number(s.grade || s.marksAwarded) / (s.taskId?.maxMarks || 100)) * 100,
             type: 'Assignment'
         })),
         ...stats.attempts.map(a => ({
@@ -165,7 +175,7 @@ const StudentGlobalAnalytics = ({ rooms = [] }) => {
     stats.submissions.filter(s => s.status === 'graded' && s.roomId).forEach(s => {
         const roomName = s.roomId.name || 'Unknown';
         if (!subjectMarks[roomName]) subjectMarks[roomName] = { total: 0, max: 0 };
-        subjectMarks[roomName].total += s.marksAwarded;
+        subjectMarks[roomName].total += Number(s.grade || s.marksAwarded);
         subjectMarks[roomName].max += (s.taskId?.maxMarks || 100);
     });
     stats.attempts.forEach(a => {
