@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../apiConfig';
-import { X, CheckCircle, Clock, AlertCircle, UploadCloud, FileText, Download } from 'lucide-react';
+import { X, CheckCircle, Clock, AlertCircle, UploadCloud, FileText, Download, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
@@ -106,6 +106,28 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
         } catch (err) { console.error(err); }
     };
 
+    const handleDeleteTask = async () => {
+        if (!window.confirm("Are you sure you want to delete this assignment?")) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/tasks/${task._id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                onClose();
+                window.location.reload(); // Refresh the page to reflect deletion
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.message || "Failed to delete task" });
+            }
+        } catch (err) {
+            console.error(err);
+            setMessage({ type: 'error', text: "An error occurred during deletion." });
+        }
+        setLoading(false);
+    };
+
     if (!isOpen || !task) return null;
 
     const isLate = task.dueDate && new Date() > new Date(task.dueDate);
@@ -131,9 +153,21 @@ const AssignmentModal = ({ isOpen, onClose, task, user, roomDetails }) => {
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{task.title}</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{task.maxMarks || 100} points</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {isTeacher && (
+                            <button 
+                                onClick={handleDeleteTask}
+                                disabled={loading}
+                                className="p-2 bg-red-100 dark:bg-red-500/10 hover:bg-red-200 dark:hover:bg-red-500/20 rounded-full transition-colors text-red-600 dark:text-red-400"
+                                title="Delete Assignment"
+                            >
+                                <Trash2 className="w-5 h-5" />
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors">
+                            <X className="w-5 h-5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}
