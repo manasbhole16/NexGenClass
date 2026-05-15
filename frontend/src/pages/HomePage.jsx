@@ -61,6 +61,11 @@ const HomePage = ({ user, onLogout }) => {
     const [showProfileInfo, setShowProfileInfo] = useState(false)
     const navigate = useNavigate()
 
+    const instructor = roomDetails?.members?.find(member => member._id === roomDetails?.owner) || null
+    const classmates = roomDetails?.members?.filter(member => member._id !== roomDetails?.owner) || []
+    const instructorName = instructor?.fullname || 'Instructor'
+    const instructorInitial = instructorName?.[0]?.toUpperCase() || 'T'
+
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
     useEffect(() => {
@@ -449,30 +454,34 @@ const HomePage = ({ user, onLogout }) => {
                 <div className="max-w-4xl mx-auto space-y-8">
                     <div>
                         <div className="flex justify-between items-center border-b border-purple-500/30 pb-2 mb-4">
-                            <h2 className="text-2xl font-bold text-purple-400">Teachers</h2>
+                            <h2 className="text-2xl font-bold text-purple-400">Teacher</h2>
                         </div>
                         <div className="flex items-center gap-4 p-4">
                             <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">
-                                T
+                                {instructorInitial}
                             </div>
-                            <span className="font-medium text-lg">Instructor</span>
+                            <span className="font-medium text-lg">{instructorName}</span>
                         </div>
                     </div>
 
                     <div>
                         <div className="flex justify-between items-center border-b border-purple-500/30 pb-2 mb-4">
                             <h2 className="text-2xl font-bold text-purple-600 dark:text-purple-400">Classmates</h2>
-                            <span className="text-gray-500 dark:text-gray-400">{roomDetails?.members?.length || 0} students</span>
+                            <span className="text-gray-500 dark:text-gray-400">{classmates.length} students</span>
                         </div>
                         <div className="space-y-1">
-                            {roomDetails?.members?.map((member, i) => (
-                                <div key={i} className="flex items-center gap-4 p-4 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors">
+                            {classmates.length > 0 ? classmates.map((member, i) => (
+                                <div key={member._id || i} className="flex items-center gap-4 p-4 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors">
                                     <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center font-bold text-white">
-                                        S
+                                        {member.fullname?.[0]?.toUpperCase() || 'S'}
                                     </div>
-                                    <span className="font-medium">Student {i+1}</span>
+                                    <span className="font-medium">{member.fullname || 'Student'}</span>
                                 </div>
-                            ))}
+                            )) : (
+                                <div className="flex items-center gap-4 p-4 rounded-xl border border-dashed border-gray-300 dark:border-white/10 text-gray-500 dark:text-gray-400">
+                                    No students have joined yet.
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

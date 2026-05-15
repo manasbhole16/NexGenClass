@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const priorityColors = {
+    Low: 'border-l-blue-500 bg-blue-500 text-white',
+    Medium: 'border-l-green-500 bg-green-500 text-white',
+    High: 'border-l-orange-500 bg-orange-500 text-white',
+    Urgent: 'border-l-red-500 bg-red-500 text-white'
+};
 
 const CalendarView = ({ tasks }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -19,16 +26,6 @@ const CalendarView = ({ tasks }) => {
 
     const safeTasks = Array.isArray(tasks) ? tasks : [];
 
-    // Helper to get local date string YYYY-MM-DD
-    const getLocalDateString = (date) => {
-        try {
-            const d = new Date(date);
-            if (isNaN(d.getTime())) return null;
-            return format(d, 'yyyy-MM-dd');
-        } catch (err) { return null; }
-    };
-
-    // Helper for UTC dates to local YYYY-MM-DD (prevents one-day shift)
     const getUTCDateString = (date) => {
         try {
             const d = new Date(date);
@@ -37,12 +34,27 @@ const CalendarView = ({ tasks }) => {
         } catch (err) { return null; }
     };
 
-    const priorityColors = {
-        Low: 'border-l-blue-500 bg-blue-500 text-white',
-        Medium: 'border-l-green-500 bg-green-500 text-white',
-        High: 'border-l-orange-500 bg-orange-500 text-white',
-        Urgent: 'border-l-red-500 bg-red-500 text-white'
+    const getLocalDateString = (date) => {
+        try {
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return null;
+            return format(d, 'yyyy-MM-dd');
+        } catch (err) { return null; }
     };
+
+    const tasksByDate = useMemo(() => {
+        return safeTasks.reduce((acc, task) => {
+            if (!task?.dueDate) return acc;
+            const utcDate = getUTCDateString(task.dueDate);
+            const localDate = getLocalDateString(task.dueDate);
+            const key = utcDate || localDate;
+            if (!key) return acc;
+
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(task);
+            return acc;
+        }, {});
+    }, [safeTasks]);
 
     return (
         <div className="bg-white dark:bg-[#0f0f12] rounded-3xl border border-gray-200 dark:border-white/5 overflow-hidden flex flex-col h-full shadow-2xl">
@@ -72,11 +84,7 @@ const CalendarView = ({ tasks }) => {
 
                 {calendarDays.map((day, i) => {
                     const localKey = getLocalDateString(day);
-                    const dayTasks = safeTasks.filter(t => {
-                        if (!t.dueDate) return false;
-                        const taskUTCKey = getUTCDateString(t.dueDate);
-                        return taskUTCKey === localKey || getLocalDateString(t.dueDate) === localKey;
-                    });
+                    const dayTasks = tasksByDate[localKey] || [];
                     const isOutside = !isSameMonth(day, monthStart);
                     const isToday = isSameDay(day, new Date());
 
