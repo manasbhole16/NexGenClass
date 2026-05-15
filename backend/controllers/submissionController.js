@@ -101,7 +101,9 @@ module.exports.uploadFile = async (req, res) => {
         const isLate = task.dueDate && new Date() > new Date(task.dueDate);
         const status = isLate ? 'late' : 'submitted';
 
-        const fileUrl = `/uploads/${req.file.filename}`;
+        // Convert the buffer into a Base64 Data URI for MongoDB storage (Vercel Serverless fix)
+        const base64Data = req.file.buffer.toString('base64');
+        const fileUrl = `data:${req.file.mimetype};base64,${base64Data}`;
         const fileName = req.file.originalname;
 
         const submission = await Submission.findOneAndUpdate(
