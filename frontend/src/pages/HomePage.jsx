@@ -24,6 +24,7 @@ import ClassStreamTab from '../components/classroom/ClassStreamTab';
 import ClassPeopleTab from '../components/classroom/ClassPeopleTab';
 import ClassGradesTab from '../components/classroom/ClassGradesTab';
 import ClassSettingsModal from '../components/classroom/ClassSettingsModal';
+import NotificationCenter from '../components/notifications/NotificationCenter';
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -317,6 +318,9 @@ const HomePage = ({ user, onLogout }) => {
                                 <PresenceAvatars users={onlineUsers} currentUserId={user?._id} />
                             </div>
                         )}
+
+                        {/* Notification Center */}
+                        <NotificationCenter user={user} />
 
                         {/* User Profile Avatar */}
                         <div className="relative">

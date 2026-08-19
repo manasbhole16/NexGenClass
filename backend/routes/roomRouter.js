@@ -31,6 +31,7 @@ router.delete("/delete/:roomId", deleteRoom);
 
 // Mount stream announcements router
 router.use("/:roomId/stream", announcementRouter);
+router.use("/:roomId/announcements", announcementRouter);
 
 // Parameterized classroom routes
 router.get("/:roomId/settings", getRoomSettings);

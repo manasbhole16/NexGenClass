@@ -1,6 +1,7 @@
 const Room = require("../models/room-model");
 const Task = require("../models/task-model");
 const Submission = require("../models/submission-model");
+const notificationService = require("../services/notificationService");
 const crypto = require("crypto");
 
 // Helper to generate unique code
@@ -78,6 +79,21 @@ module.exports.joinRoom = async (req, res) => {
                 req.io.to(room._id.toString()).emit("student_joined", {
                     roomId: room._id,
                     user: { _id: req.user._id, fullname: req.user.fullname, email: req.user.email, role: req.user.role }
+                });
+            }
+
+            // Notify classroom instructor / owner
+            if (room.owner && room.owner.toString() !== req.user._id.toString()) {
+                await notificationService.createNotification({
+                    recipient: room.owner,
+                    actor: req.user._id,
+                    type: "classroom_joined",
+                    title: "New Student Joined",
+                    message: `${req.user.fullname} joined your class "${room.name}".`,
+                    entityType: "room",
+                    entityId: room._id,
+                    roomId: room._id,
+                    io: req.io
                 });
             }
         }
@@ -372,6 +388,19 @@ module.exports.kickMember = async (req, res) => {
         if (req.io) {
             req.io.to(roomId).emit("student_removed", { roomId, userId });
         }
+
+        // Notify the removed student
+        await notificationService.createNotification({
+            recipient: userId,
+            actor: req.user._id,
+            type: "classroom_removed",
+            title: "Removed from Classroom",
+            message: `You have been removed from class "${room.name}".`,
+            entityType: "room",
+            entityId: room._id,
+            roomId: room._id,
+            io: req.io
+        });
 
         res.json({ success: true, message: "Member kicked successfully" });
     } catch (err) {

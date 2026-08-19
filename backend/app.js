@@ -15,6 +15,7 @@ const submissionRoutes = require("./routes/submissionRouter");
 const attendanceRoutes = require("./routes/attendanceRouter");
 const assessmentRoutes = require("./routes/assessmentRouter");
 const analyticsRoutes = require("./routes/analyticsRouter");
+const notificationRoutes = require("./routes/notificationRouter");
 const ChatMessage = require("./models/chatMessage-model");
 const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
@@ -81,6 +82,7 @@ app.use("/api/submissions", submissionRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/assessments", assessmentRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Socket Connection Handler
 const usersInRooms = {}; // { roomId: [ { userId, fullname, socketId } ] }
@@ -88,10 +90,26 @@ const usersInRooms = {}; // { roomId: [ { userId, fullname, socketId } ] }
 io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
 
+    // Private user notifications channel
+    socket.on("joinUser", ({ userId }) => {
+        if (!userId) return;
+        const uId = userId.toString();
+        socket.join(uId);
+        socket.join(`user_${uId}`);
+        console.log(`Socket ${socket.id} joined private channel user_${uId}`);
+    });
+
     socket.on("joinRoom", ({ roomId, user }) => {
         if (!roomId || !user) return;
 
         socket.join(roomId);
+
+        // Auto-join user room as well
+        if (user._id) {
+            const uId = user._id.toString();
+            socket.join(uId);
+            socket.join(`user_${uId}`);
+        }
 
         // Track presence
         if (!usersInRooms[roomId]) usersInRooms[roomId] = [];

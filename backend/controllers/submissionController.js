@@ -1,6 +1,7 @@
 const Submission = require("../models/submission-model");
 const Task = require("../models/task-model");
 const Room = require("../models/room-model");
+const notificationService = require("../services/notificationService");
 
 // Submit / Turn In / Unsubmit Assignment
 module.exports.submitAssignment = async (req, res) => {
@@ -73,6 +74,9 @@ module.exports.submitAssignment = async (req, res) => {
             updateData.fileName = safeAttachments[0].fileName;
         }
 
+        const existingSubmission = await Submission.findOne({ taskId, studentId });
+        const isResubmit = existingSubmission && (existingSubmission.status === 'unsubmitted' || existingSubmission.status === 'graded');
+
         const submission = await Submission.findOneAndUpdate(
             { taskId, studentId },
             updateData,
@@ -81,6 +85,25 @@ module.exports.submitAssignment = async (req, res) => {
 
         if (req.io && task.room) {
             req.io.to(task.room.toString()).emit("submissionUpdate", submission);
+        }
+
+        // Notify room owner / teacher
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            if (room && room.owner && room.owner.toString() !== studentId.toString()) {
+                await notificationService.createNotification({
+                    recipient: room.owner,
+                    actor: studentId,
+                    type: isResubmit ? "assignment_resubmitted" : "assignment_submitted",
+                    title: isResubmit ? "Assignment Resubmitted" : "Assignment Submitted",
+                    message: `${req.user.fullname} ${isResubmit ? 'resubmitted' : 'submitted'} "${task.title}".`,
+                    entityType: "submission",
+                    entityId: submission._id,
+                    roomId: room._id,
+                    metadata: { taskId: task._id, submissionId: submission._id },
+                    io: req.io
+                });
+            }
         }
 
         res.json({ success: true, submission });
@@ -265,6 +288,23 @@ module.exports.gradeSubmission = async (req, res) => {
 
         if (req.io && task.room) {
             req.io.to(task.room.toString()).emit("submissionUpdate", submission);
+        }
+
+        // Notify student of graded assignment
+        if (submission.studentId) {
+            const studentRecipientId = submission.studentId._id || submission.studentId;
+            await notificationService.createNotification({
+                recipient: studentRecipientId,
+                actor: req.user._id,
+                type: "assignment_graded",
+                title: "Assignment Graded",
+                message: `Your assignment "${task.title}" has been graded: ${calculatedMarks !== null ? calculatedMarks : ''} / ${task.maxMarks || 100} pts.`,
+                entityType: "submission",
+                entityId: submission._id,
+                roomId: task.room,
+                metadata: { taskId: task._id, submissionId: submission._id, marks: calculatedMarks, maxMarks: task.maxMarks },
+                io: req.io
+            });
         }
 
         res.json({ success: true, submission });

@@ -1,6 +1,7 @@
 const Task = require("../models/task-model");
 const Room = require("../models/room-model");
 const Submission = require("../models/submission-model");
+const notificationService = require("../services/notificationService");
 const { sendMail } = require("../utils/mailer");
 const { isAiConfigured } = require("../utils/aiClient");
 const { generateTaskDraftFromPrompt } = require("../services/aiGeneration");
@@ -80,6 +81,36 @@ module.exports.createTask = async (req, res) => {
                     req.io.to(roomId).emit("taskCreated", task);
                 } else {
                     req.io.emit("taskCreated", task);
+                }
+            }
+
+            // If classroom assignment, notify eligible enrolled students
+            if (!isPersonal && roomId) {
+                const room = await Room.findById(roomId);
+                if (room) {
+                    let targetRecipients = [];
+                    if (Array.isArray(assignedTo) && assignedTo.length > 0) {
+                        targetRecipients = assignedTo.map(id => id.toString());
+                    } else {
+                        targetRecipients = (room.members || [])
+                            .filter(m => m.toString() !== req.user._id.toString())
+                            .map(m => m.toString());
+                    }
+
+                    if (targetRecipients.length > 0) {
+                        const notifs = targetRecipients.map(recipientId => ({
+                            recipient: recipientId,
+                            actor: req.user._id,
+                            type: "assignment_created",
+                            title: "New Assignment",
+                            message: `New assignment: "${task.title}" posted in "${room.name}".`,
+                            entityType: "task",
+                            entityId: task._id,
+                            roomId: room._id,
+                            metadata: { taskId: task._id, dueDate: task.dueDate }
+                        }));
+                        await notificationService.createManyNotifications(notifs, req.io);
+                    }
                 }
             }
 

@@ -10,6 +10,7 @@ import StudentGlobalAnalytics from '../components/analytics/StudentGlobalAnalyti
 import CreateClassModal from '../components/classroom/CreateClassModal';
 import EditClassModal from '../components/classroom/EditClassModal';
 import DashboardWorkArea from '../components/classroom/DashboardWorkArea';
+import NotificationCenter from '../components/notifications/NotificationCenter';
 import { getBannerGradient } from '../utils/themeUtils';
 
 const RoomSelectionPage = ({ user, onLogout }) => {
@@ -181,6 +182,9 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                             <Plus className="w-4 h-4" /> Join Class
                         </button>
                     )}
+
+                    {/* Notification Center */}
+                    <NotificationCenter user={user} />
 
                     {/* Profile Avatar */}
                     <div className="relative">

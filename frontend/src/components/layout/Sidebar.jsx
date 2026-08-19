@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, GraduationCap, ClipboardCheck, BrainCircuit, ChevronDown, ChevronRight, BookOpen, Layers } from 'lucide-react';
+import { Home, Calendar, CheckSquare, GraduationCap, ClipboardCheck, BrainCircuit, Bell, ChevronDown, ChevronRight, BookOpen, Layers } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
 import ThemeToggle from '../ThemeToggle';
 
@@ -35,6 +35,7 @@ const Sidebar = ({ user }) => {
 
     const navItems = [
         { name: 'Home', icon: Home, path: '/rooms' },
+        { name: 'Notifications', icon: Bell, path: '/notifications' },
         { name: 'Calendar', icon: Calendar, path: '/calendar' },
         { name: 'To-do / Tasks', icon: CheckSquare, path: '/room/personal' },
         { name: 'Attendance', icon: ClipboardCheck, path: '/attendance' },

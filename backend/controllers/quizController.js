@@ -2,6 +2,7 @@ const Quiz = require('../models/quiz-model');
 const Question = require('../models/question-model');
 const Attempt = require('../models/attempt-model');
 const Room = require('../models/room-model');
+const notificationService = require('../services/notificationService');
 const mongoose = require('mongoose');
 const { isAiConfigured } = require("../utils/aiClient");
 const { generateQuizQuestionsFromNotes } = require("../services/aiGeneration");
@@ -210,6 +211,27 @@ module.exports.publishQuiz = async (req, res) => {
 
         quiz.isPublished = !quiz.isPublished;
         await quiz.save();
+
+        if (quiz.isPublished && quiz.roomId) {
+            const room = await Room.findById(quiz.roomId);
+            if (room) {
+                const enrolledStudentIds = (room.members || []).filter(m => m.toString() !== req.user._id.toString());
+                if (enrolledStudentIds.length > 0) {
+                    const notifs = enrolledStudentIds.map(stId => ({
+                        recipient: stId,
+                        actor: req.user._id,
+                        type: "quiz_published",
+                        title: "New Quiz Published",
+                        message: `Quiz "${quiz.title}" (${quiz.totalMarks} pts) is now live in "${room.name}".`,
+                        entityType: "quiz",
+                        entityId: quiz._id,
+                        roomId: room._id,
+                        metadata: { quizId: quiz._id, totalMarks: quiz.totalMarks, deadline: quiz.deadline }
+                    }));
+                    await notificationService.createManyNotifications(notifs, req.io);
+                }
+            }
+        }
 
         res.json({ success: true, quiz });
     } catch (error) {
@@ -580,6 +602,22 @@ module.exports.attemptQuiz = async (req, res) => {
 
         await attempt.save();
 
+        // Notify quiz creator / teacher of submission
+        if (quiz.createdBy) {
+            await notificationService.createNotification({
+                recipient: quiz.createdBy,
+                actor: req.user._id,
+                type: "quiz_submitted",
+                title: "Quiz Attempt Submitted",
+                message: `${req.user.fullname} completed attempt #${attempt.attemptNumber} for "${quiz.title}".`,
+                entityType: "attempt",
+                entityId: attempt._id,
+                roomId: quiz.roomId,
+                metadata: { quizId: quiz._id, attemptId: attempt._id },
+                io: req.io
+            });
+        }
+
         res.status(200).json({
             success: true,
             attempt,
@@ -831,6 +869,22 @@ module.exports.evaluateAttempt = async (req, res) => {
         attempt.evaluatedBy = req.user._id;
 
         await attempt.save();
+
+        // Notify student of graded quiz
+        if (attempt.studentId) {
+            await notificationService.createNotification({
+                recipient: attempt.studentId,
+                actor: req.user._id,
+                type: "quiz_graded",
+                title: "Quiz Graded",
+                message: `Your score for "${quiz.title}" is ready: ${attempt.score} / ${totalQuizMarks} (${attempt.percentage}%).`,
+                entityType: "attempt",
+                entityId: attempt._id,
+                roomId: quiz.roomId,
+                metadata: { quizId: quiz._id, attemptId: attempt._id, score: attempt.score, totalMarks: totalQuizMarks },
+                io: req.io
+            });
+        }
 
         res.json({ success: true, attempt });
     } catch (error) {

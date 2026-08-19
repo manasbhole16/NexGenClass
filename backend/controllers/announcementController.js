@@ -1,5 +1,6 @@
 const Announcement = require("../models/announcement-model");
 const Room = require("../models/room-model");
+const notificationService = require("../services/notificationService");
 
 // Get Stream Announcements for Room
 module.exports.getAnnouncements = async (req, res) => {
@@ -60,6 +61,23 @@ module.exports.createAnnouncement = async (req, res) => {
 
         if (req.io) {
             req.io.to(roomId).emit("new_announcement", populatedAnnouncement);
+        }
+
+        // Notify enrolled classroom members
+        const recipientIds = (room.members || []).filter(m => m.toString() !== req.user._id.toString());
+        if (recipientIds.length > 0) {
+            const notifs = recipientIds.map(recId => ({
+                recipient: recId,
+                actor: req.user._id,
+                type: "announcement_created",
+                title: "New Class Announcement",
+                message: `${req.user.fullname} posted an announcement in "${room.name}".`,
+                entityType: "announcement",
+                entityId: populatedAnnouncement._id,
+                roomId: room._id,
+                metadata: { announcementId: populatedAnnouncement._id }
+            }));
+            await notificationService.createManyNotifications(notifs, req.io);
         }
 
         res.status(201).json({ success: true, announcement: populatedAnnouncement });
@@ -178,12 +196,29 @@ module.exports.addComment = async (req, res) => {
 
         if (req.io) {
             req.io.to(roomId).emit("new_announcement_comment", {
+                roomId,
                 announcementId: id,
-                comments: populatedAnnouncement.comments
+                comment: populatedAnnouncement.comments[populatedAnnouncement.comments.length - 1]
             });
         }
 
-        res.status(201).json({ success: true, comments: populatedAnnouncement.comments });
+        // Notify announcement author if not the commenter
+        if (announcement.author && announcement.author.toString() !== req.user._id.toString()) {
+            await notificationService.createNotification({
+                recipient: announcement.author,
+                actor: req.user._id,
+                type: "announcement_comment",
+                title: "New Comment on Announcement",
+                message: `${req.user.fullname} commented on your announcement: "${content.trim().slice(0, 50)}${content.trim().length > 50 ? '...' : ''}"`,
+                entityType: "announcement",
+                entityId: announcement._id,
+                roomId: room._id,
+                metadata: { announcementId: announcement._id },
+                io: req.io
+            });
+        }
+
+        res.status(201).json({ success: true, announcement: populatedAnnouncement });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
