@@ -9,7 +9,8 @@ function makeRequest({ path, method = 'GET', body = null, cookie = null }) {
     return new Promise((resolve, reject) => {
         const postData = body ? JSON.stringify(body) : null;
         const headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Connection': 'close'
         };
         if (postData) {
             headers['Content-Length'] = Buffer.byteLength(postData);

@@ -17,6 +17,7 @@ const assessmentRoutes = require("./routes/assessmentRouter");
 const analyticsRoutes = require("./routes/analyticsRouter");
 const notificationRoutes = require("./routes/notificationRouter");
 const liveSessionRoutes = require("./routes/liveSessionRouter");
+const formRoutes = require("./routes/formRouter");
 const ChatMessage = require("./models/chatMessage-model");
 const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
@@ -79,6 +80,7 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/quiz", quizRoutes);
+app.use("/api/forms", formRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/assessments", assessmentRoutes);

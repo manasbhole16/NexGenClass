@@ -7,7 +7,7 @@ import {
     Plus, Search, ArrowLeft, Lock, Globe, LogOut, Settings, Trash2, Users,
     MessageSquare, ClipboardList, LayoutDashboard, Award, BrainCircuit, BarChart2,
     Calendar, CheckCircle, FileText, Filter, ChevronDown, ChevronRight, Layers,
-    BookOpen, CheckSquare, Paperclip, Clock, Sparkles
+    BookOpen, CheckSquare, Paperclip, Clock, Sparkles, FileSpreadsheet
 } from 'lucide-react';
 import TaskCard from '../components/board/TaskCard';
 import NewTaskModal from '../components/NewTaskModal';
@@ -17,6 +17,7 @@ import API_BASE_URL from '../apiConfig';
 import PresenceAvatars from '../components/board/PresenceAvatars';
 import RoomChat from '../components/board/RoomChat';
 import QuizModule from '../components/quiz/QuizModule';
+import FormModule from '../components/forms/FormModule';
 import ClassroomAnalytics from '../components/analytics/ClassroomAnalytics';
 
 // Google Classroom Core Experience Components
@@ -410,6 +411,16 @@ const HomePage = ({ user, onLogout }) => {
                         Quizzes
                     </button>
                     <button
+                        onClick={() => setActiveTab('forms')}
+                        className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
+                            activeTab === 'forms'
+                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
+                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                    >
+                        Forms
+                    </button>
+                    <button
                         onClick={() => setActiveTab('analytics')}
                         className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
                             activeTab === 'analytics'
@@ -500,6 +511,12 @@ const HomePage = ({ user, onLogout }) => {
                                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 rounded-xl transition-colors text-left"
                                         >
                                             <FileText className="w-4 h-4 text-purple-500" /> Assignment
+                                        </button>
+                                        <button
+                                            onClick={() => { setShowCreateDropdown(false); setActiveTab('forms'); }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 rounded-xl transition-colors text-left"
+                                        >
+                                            <FileSpreadsheet className="w-4 h-4 text-purple-500" /> Google Form
                                         </button>
                                         <button
                                             onClick={() => { setShowCreateDropdown(false); setIsModalOpen(true); }}
@@ -705,7 +722,14 @@ const HomePage = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* TAB 6: ANALYTICS */}
+            {/* TAB 6: GOOGLE FORMS 1.0 */}
+            {activeTab === 'forms' && (
+                <div className="max-w-5xl mx-auto">
+                    <FormModule roomId={isPersonal ? 'personal' : roomId} user={user} roomDetails={roomDetails} />
+                </div>
+            )}
+
+            {/* TAB 7: ANALYTICS */}
             {activeTab === 'analytics' && (
                 <div className="max-w-5xl mx-auto">
                     <ClassroomAnalytics roomId={roomId} />

@@ -40,6 +40,10 @@ const notificationSchema = new mongoose.Schema(
                 "quiz_graded",
                 "quiz_returned",
                 "quiz_evaluation_pending",
+                // Forms
+                "form_published",
+                "form_response_submitted",
+                "form_graded",
                 // Stream / Announcements
                 "announcement_created",
                 "announcement_comment",
@@ -62,7 +66,7 @@ const notificationSchema = new mongoose.Schema(
         },
         entityType: {
             type: String,
-            enum: ["task", "submission", "quiz", "attempt", "announcement", "room", "system"],
+            enum: ["task", "submission", "quiz", "attempt", "form", "announcement", "room", "system"],
             default: "system"
         },
         entityId: {
