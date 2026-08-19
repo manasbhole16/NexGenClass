@@ -1,44 +1,181 @@
 const Submission = require("../models/submission-model");
 const Task = require("../models/task-model");
+const Room = require("../models/room-model");
 
-// Submit Assignment
+// Submit / Turn In / Unsubmit Assignment
 module.exports.submitAssignment = async (req, res) => {
     try {
         const { taskId } = req.params;
-        const { content, roomId } = req.body;
+        const { content, roomId, attachments, unsubmit } = req.body;
         const studentId = req.user._id;
 
         const task = await Task.findById(taskId);
         if (!task) return res.status(404).json({ message: "Task not found" });
 
+        // Verify Student Enrolled
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            if (!room) return res.status(404).json({ message: "Classroom not found" });
+            const isMember = room.members.some(m => m.toString() === studentId.toString());
+            if (!isMember) {
+                return res.status(403).json({ message: "You are not enrolled in this classroom." });
+            }
+        }
+
+        // Handle Unsubmit Action
+        if (unsubmit) {
+            const existing = await Submission.findOne({ taskId, studentId });
+            if (!existing) {
+                return res.status(404).json({ message: "No submission to unsubmit." });
+            }
+            if (existing.status === 'graded') {
+                return res.status(400).json({ message: "Cannot unsubmit work that has already been graded." });
+            }
+
+            existing.status = 'unsubmitted';
+            existing.unsubmittedAt = new Date();
+            await existing.save();
+
+            if (req.io && task.room) {
+                req.io.to(task.room.toString()).emit("submissionUpdate", existing);
+            }
+
+            return res.json({ success: true, submission: existing, message: "Assignment unsubmitted." });
+        }
+
         // Check if late
         const isLate = task.dueDate && new Date() > new Date(task.dueDate);
         const status = isLate ? 'late' : 'submitted';
 
+        // Prepare attachments array
+        let safeAttachments = [];
+        if (Array.isArray(attachments)) {
+            safeAttachments = attachments.map(a => ({
+                fileUrl: a.fileUrl || a.url || '',
+                fileName: a.fileName || a.title || 'Attachment',
+                fileType: a.fileType || 'file',
+                uploadedAt: a.uploadedAt ? new Date(a.uploadedAt) : new Date()
+            })).filter(a => a.fileUrl);
+        }
+
+        const updateData = {
+            roomId: task.room || roomId,
+            content: (content || '').trim(),
+            status,
+            submittedAt: new Date(),
+            unsubmittedAt: null
+        };
+
+        if (safeAttachments.length > 0) {
+            updateData.attachments = safeAttachments;
+            // Legacy backward compatibility
+            updateData.fileUrl = safeAttachments[0].fileUrl;
+            updateData.fileName = safeAttachments[0].fileName;
+        }
+
         const submission = await Submission.findOneAndUpdate(
             { taskId, studentId },
-            { 
-                roomId, 
-                content, 
-                status, 
-                submittedAt: new Date() 
-            },
+            updateData,
             { new: true, upsert: true }
-        );
+        ).populate('studentId', 'fullname email');
 
-        if (req.io) req.io.emit("submissionUpdate", submission);
+        if (req.io && task.room) {
+            req.io.to(task.room.toString()).emit("submissionUpdate", submission);
+        }
 
         res.json({ success: true, submission });
     } catch (err) {
+        console.error("Submit error:", err);
         res.status(500).json({ message: err.message });
     }
 };
 
-// Get Submissions for a Task (Teacher)
+// Upload Files for Assignment (Supports multiple files up to 5)
+module.exports.uploadFile = async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { roomId, content } = req.body;
+        const studentId = req.user._id;
+
+        const files = req.files || (req.file ? [req.file] : []);
+        if (!files || files.length === 0) {
+            return res.status(400).json({ message: "No files uploaded" });
+        }
+
+        const task = await Task.findById(taskId);
+        if (!task) return res.status(404).json({ message: "Task not found" });
+
+        const isLate = task.dueDate && new Date() > new Date(task.dueDate);
+        const status = isLate ? 'late' : 'submitted';
+
+        // Convert all uploaded buffers to Base64 Data URIs
+        const newAttachments = files.map(file => {
+            const base64Data = file.buffer.toString('base64');
+            const fileUrl = `data:${file.mimetype};base64,${base64Data}`;
+            return {
+                fileUrl,
+                fileName: file.originalname,
+                fileType: file.mimetype,
+                uploadedAt: new Date()
+            };
+        });
+
+        // Find existing submission to append attachments if needed
+        let existing = await Submission.findOne({ taskId, studentId });
+        let combinedAttachments = newAttachments;
+
+        if (existing && Array.isArray(existing.attachments) && existing.attachments.length > 0) {
+            combinedAttachments = [...existing.attachments, ...newAttachments].slice(-5); // max 5
+        }
+
+        const submission = await Submission.findOneAndUpdate(
+            { taskId, studentId },
+            {
+                roomId: task.room || roomId,
+                content: content !== undefined ? content : (existing?.content || ''),
+                status,
+                attachments: combinedAttachments,
+                // Legacy fields
+                fileUrl: combinedAttachments[0]?.fileUrl || '',
+                fileName: combinedAttachments[0]?.fileName || '',
+                submittedAt: new Date(),
+                unsubmittedAt: null
+            },
+            { new: true, upsert: true }
+        ).populate('studentId', 'fullname email');
+
+        if (req.io && task.room) {
+            req.io.to(task.room.toString()).emit("submissionUpdate", submission);
+        }
+
+        res.json({ success: true, submission });
+    } catch (err) {
+        console.error("Upload error:", err);
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// Get Submissions for a Task (Teacher Only)
 module.exports.getSubmissionsForTask = async (req, res) => {
     try {
         const { taskId } = req.params;
-        const submissions = await Submission.find({ taskId }).populate('studentId', 'fullname email');
+        const task = await Task.findById(taskId);
+        if (!task) return res.status(404).json({ message: "Task not found" });
+
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            const isOwner = room && room.owner?.toString() === req.user._id.toString();
+            const isTaskOwner = task.owner && task.owner.toString() === req.user._id.toString();
+            const isRoomTeacher = req.user.role === 'teacher' && room && (isOwner || room.members.some(m => m.toString() === req.user._id.toString()));
+
+            if (!isOwner && !isTaskOwner && !isRoomTeacher) {
+                return res.status(403).json({ message: "Forbidden: Only classroom instructors can view all student submissions." });
+            }
+        }
+
+        const submissions = await Submission.find({ taskId })
+            .populate('studentId', 'fullname email role');
+
         res.json({ success: true, submissions });
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -55,85 +192,84 @@ module.exports.getStudentSubmissions = async (req, res) => {
         }
         const submissions = await Submission.find(query)
             .populate('roomId', 'name code')
-            .populate('taskId', 'title maxMarks dueDate');
+            .populate('taskId', 'title maxMarks dueDate topic rubric');
+
         res.json({ success: true, submissions });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-// Grade Submission
+// Grade Submission with Rubric & Overall Feedback (Teacher Only)
 module.exports.gradeSubmission = async (req, res) => {
     try {
         const { id } = req.params;
-        const { marksAwarded, teacherFeedback, grade, feedback } = req.body;
+        const { marksAwarded, teacherFeedback, grade, feedback, rubricEvaluation } = req.body;
 
-        const finalGrade = grade || marksAwarded;
-        const finalFeedback = feedback || teacherFeedback;
-
-        const submission = await Submission.findByIdAndUpdate(
-            id,
-            { 
-                marksAwarded: finalGrade, 
-                teacherFeedback: finalFeedback, 
-                grade: finalGrade, 
-                feedback: finalFeedback, 
-                status: 'graded',
-                gradedAt: new Date(),
-                gradedBy: req.user._id
-            },
-            { new: true }
-        );
-
+        const submission = await Submission.findById(id);
         if (!submission) return res.status(404).json({ message: "Submission not found" });
 
-        if (req.io) req.io.emit("submissionUpdate", submission);
-
-        res.json({ success: true, submission });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
-
-// Upload File for Assignment
-module.exports.uploadFile = async (req, res) => {
-    try {
-        const { taskId } = req.params;
-        const { roomId, content } = req.body;
-        const studentId = req.user._id;
-
-        if (!req.file) {
-            return res.status(400).json({ message: "No file uploaded" });
-        }
-
-        const task = await Task.findById(taskId);
+        const task = await Task.findById(submission.taskId);
         if (!task) return res.status(404).json({ message: "Task not found" });
 
-        const isLate = task.dueDate && new Date() > new Date(task.dueDate);
-        const status = isLate ? 'late' : 'submitted';
+        // Server-Side RBAC Check
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            const isOwner = room && room.owner?.toString() === req.user._id.toString();
+            const isTaskOwner = task.owner && task.owner.toString() === req.user._id.toString();
+            const isRoomTeacher = req.user.role === 'teacher' && room && (isOwner || room.members.some(m => m.toString() === req.user._id.toString()));
 
-        // Convert the buffer into a Base64 Data URI for MongoDB storage (Vercel Serverless fix)
-        const base64Data = req.file.buffer.toString('base64');
-        const fileUrl = `data:${req.file.mimetype};base64,${base64Data}`;
-        const fileName = req.file.originalname;
+            if (!isOwner && !isTaskOwner && !isRoomTeacher) {
+                return res.status(403).json({ message: "Forbidden: Only classroom instructors can grade student submissions." });
+            }
+        } else {
+            if (task.owner.toString() !== req.user._id.toString()) {
+                return res.status(403).json({ message: "Forbidden: You are not authorized to grade this submission." });
+            }
+        }
 
-        const submission = await Submission.findOneAndUpdate(
-            { taskId, studentId },
-            { 
-                roomId, 
-                content,
-                status, 
-                fileUrl,
-                fileName,
-                submittedAt: new Date() 
-            },
-            { new: true, upsert: true }
-        );
+        let calculatedMarks = marksAwarded !== undefined ? Number(marksAwarded) : (grade !== undefined ? Number(grade) : null);
+        let safeRubricEvaluation = [];
 
-        if (req.io) req.io.emit("submissionUpdate", submission);
+        // If Rubric Evaluation is provided, validate and calculate total securely
+        if (Array.isArray(rubricEvaluation) && rubricEvaluation.length > 0) {
+            let sumScore = 0;
+            safeRubricEvaluation = rubricEvaluation.map(item => {
+                const max = Number(item.maxPoints) || 0;
+                const awarded = Math.min(Math.max(0, Number(item.pointsAwarded) || 0), max);
+                sumScore += awarded;
+                return {
+                    criterion: String(item.criterion || '').trim(),
+                    pointsAwarded: awarded,
+                    maxPoints: max,
+                    feedback: String(item.feedback || '').trim()
+                };
+            });
+            calculatedMarks = sumScore;
+        }
+
+        const finalFeedback = (teacherFeedback || feedback || '').trim();
+
+        submission.marksAwarded = calculatedMarks;
+        submission.grade = calculatedMarks !== null ? String(calculatedMarks) : '';
+        submission.teacherFeedback = finalFeedback;
+        submission.feedback = finalFeedback;
+        submission.rubricEvaluation = safeRubricEvaluation;
+        submission.status = 'graded';
+        submission.gradedAt = new Date();
+        submission.returnedAt = new Date();
+        submission.gradedBy = req.user._id;
+
+        await submission.save();
+        await submission.populate('studentId', 'fullname email');
+
+        if (req.io && task.room) {
+            req.io.to(task.room.toString()).emit("submissionUpdate", submission);
+        }
 
         res.json({ success: true, submission });
     } catch (err) {
+        console.error("Grading Error:", err);
         res.status(500).json({ message: err.message });
     }
 };

@@ -24,6 +24,7 @@ const startTaskReminderJob = () => {
             const tasks = await Task.find({
                 dueDate: { $gte: now, $lte: windowEnd },
                 status: { $ne: "Done" },
+                isDraft: { $ne: true },
                 $or: [
                     { deadlineReminderSentAt: { $exists: false } },
                     { deadlineReminderSentAt: null }

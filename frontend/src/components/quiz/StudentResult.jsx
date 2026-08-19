@@ -1,25 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../../apiConfig';
-import { ArrowLeft, Loader, Trophy, Star } from 'lucide-react';
+import { 
+    ArrowLeft, 
+    Loader, 
+    Trophy, 
+    Star, 
+    CheckCircle2, 
+    XCircle, 
+    Clock, 
+    AlertCircle, 
+    HelpCircle, 
+    Layers, 
+    MessageSquare, 
+    Check, 
+    Eye, 
+    Calendar,
+    ChevronDown,
+    ChevronUp
+} from 'lucide-react';
 import Confetti from 'react-confetti';
 
 const StudentResult = ({ quiz, user, onBack }) => {
     const [loading, setLoading] = useState(true);
-    const [result, setResult] = useState(null);
+    const [resultData, setResultData] = useState(null);
+    const [selectedAttemptNum, setSelectedAttemptNum] = useState(null);
     const [showConfetti, setShowConfetti] = useState(false);
+    const [showQuestionBreakdown, setShowQuestionBreakdown] = useState(true);
 
     useEffect(() => {
-        fetchResult();
-    }, []);
+        fetchResult(selectedAttemptNum);
+    }, [selectedAttemptNum]);
 
-    const fetchResult = async () => {
+    const fetchResult = async (attemptNum = null) => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/result/${user._id}`, { credentials: 'include' });
+            setLoading(true);
+            const query = attemptNum ? `?attemptNumber=${attemptNum}` : '';
+            const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/result/${user._id}${query}`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                setResult(data.attempt);
-                // Show confetti if score is more than 50% AND evaluated
-                if (data.attempt.isEvaluated && data.attempt.score >= (quiz.totalMarks / 2)) {
+                setResultData(data);
+                if (data.attempt?.attemptNumber && !selectedAttemptNum) {
+                    setSelectedAttemptNum(data.attempt.attemptNumber);
+                }
+                if (data.attempt?.isEvaluated && data.attempt?.percentage >= 60) {
                     setShowConfetti(true);
                     setTimeout(() => setShowConfetti(false), 5000);
                 }
@@ -32,72 +55,339 @@ const StudentResult = ({ quiz, user, onBack }) => {
     };
 
     if (loading) {
-        return <div className="flex justify-center p-12"><Loader className="w-8 h-8 animate-spin text-pink-500" /></div>;
+        return (
+            <div className="h-[calc(100vh-180px)] flex items-center justify-center">
+                <Loader className="w-8 h-8 animate-spin text-pink-500" />
+            </div>
+        );
     }
 
-    if (!result) return <div className="text-gray-400 p-8">Result not found.</div>;
+    if (!resultData || !resultData.attempt) {
+        return (
+            <div className="max-w-2xl mx-auto text-center p-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-4">
+                <AlertCircle className="w-12 h-12 text-slate-400 mx-auto" />
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">No Assessment Record Found</h3>
+                <p className="text-xs text-slate-400">You haven't completed or submitted an attempt for this quiz yet.</p>
+                <button onClick={onBack} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all">
+                    Back to Quizzes
+                </button>
+            </div>
+        );
+    }
 
-    const percentage = Math.round((result.score / quiz.totalMarks) * 100);
+    const { attempt, questions = [], allAttempts = [], isResultHidden } = resultData;
+    const totalPossibleMarks = quiz.totalMarks || (questions.length > 0 ? questions.reduce((sum, q) => sum + q.marks, 0) : 100);
+    const percentage = attempt.percentage !== undefined ? attempt.percentage : (totalPossibleMarks > 0 ? Math.round((attempt.score / totalPossibleMarks) * 100) : 0);
 
     return (
-        <div className="max-w-2xl mx-auto space-y-8 relative">
-            {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={200} />}
-            
-            <button onClick={onBack} className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-                <ArrowLeft className="w-4 h-4" /> Back to Quizzes
-            </button>
+        <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-fadeIn relative">
+            {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={250} />}
 
-            <div className="bg-pink-50 dark:bg-gradient-to-b dark:from-pink-500/20 dark:to-purple-500/5 border border-pink-200 dark:border-pink-500/30 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full">
-                    <div className="absolute top-[-50%] left-[-50%] w-full h-full bg-pink-500/20 blur-[100px] rounded-full" />
+            {/* Header & Back Action */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <button onClick={onBack} className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold text-xs transition-colors">
+                    <ArrowLeft className="w-4 h-4" /> Back to Quizzes
+                </button>
+
+                {/* Multiple Attempts Switcher */}
+                {allAttempts.length > 1 && (
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        {allAttempts.map(att => (
+                            <button
+                                key={att.attemptNumber}
+                                onClick={() => setSelectedAttemptNum(att.attemptNumber)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                    attempt.attemptNumber === att.attemptNumber 
+                                        ? 'bg-pink-600 text-white shadow-md' 
+                                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                            >
+                                Attempt {att.attemptNumber} {att.isEvaluated ? `(${att.percentage || 0}%)` : '• Pending'}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* ========================================================= */}
+            {/* HIDDEN RESULTS STATE (showResultsImmediately = false)    */}
+            {/* ========================================================= */}
+            {isResultHidden ? (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-5 shadow-lg">
+                    <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto border border-indigo-500/20">
+                        <Clock className="w-8 h-8 animate-pulse" />
+                    </div>
+                    <div className="space-y-2">
+                        <span className="text-xs font-black uppercase tracking-wider px-3 py-1 rounded-xl bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                            {quiz.topic || 'Assessment Completed'}
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-3">
+                            Attempt Submitted Successfully
+                        </h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                            {resultData.message || "Your exam has been submitted securely. Detailed results, scores, and answer reviews will be released by your instructor."}
+                        </p>
+                    </div>
+
+                    <div className="p-4 max-w-sm mx-auto bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 space-y-1">
+                        <p>Attempt Number: {attempt.attemptNumber}</p>
+                        <p>Submitted At: {new Date(attempt.submittedAt).toLocaleString()}</p>
+                    </div>
                 </div>
-                
-                <div className="relative z-10 flex flex-col items-center">
-                    {!result.isEvaluated ? (
-                        <>
-                            <div className="w-24 h-24 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(245,158,11,0.5)]">
-                                <Loader className="w-12 h-12 text-white animate-spin-slow" />
+            ) : (
+                /* ========================================================= */
+                /* EVALUATED / AVAILABLE RESULTS DISPLAY                     */
+                /* ========================================================= */
+                <div className="space-y-6">
+                    {/* Main Score Hero Card */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden text-center space-y-6">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100 dark:border-slate-800">
+                            <span className="text-xs font-black uppercase px-3 py-1 rounded-xl bg-pink-500/10 text-pink-500 border border-pink-500/20">
+                                {quiz.topic || 'Academic Quiz'}
+                            </span>
+                            <span className="text-xs font-bold text-slate-400">
+                                Attempt {attempt.attemptNumber} of {quiz.allowedAttempts || 1}
+                            </span>
+                        </div>
+
+                        {/* Status Icon & Message */}
+                        <div className="flex flex-col items-center">
+                            <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-4 shadow-xl ${
+                                !attempt.isEvaluated 
+                                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
+                                    : percentage >= 75 
+                                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-emerald-500/10' 
+                                        : 'bg-pink-500/10 text-pink-500 border border-pink-500/20'
+                            }`}>
+                                {!attempt.isEvaluated ? (
+                                    <Clock className="w-10 h-10 animate-spin-slow" />
+                                ) : percentage >= 75 ? (
+                                    <Trophy className="w-10 h-10" />
+                                ) : (
+                                    <Star className="w-10 h-10" />
+                                )}
                             </div>
-                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">Pending Evaluation</h2>
-                            <p className="text-gray-700 dark:text-gray-300 mb-8 max-w-sm mx-auto">Your short answers are waiting to be graded by the teacher.</p>
-                        </>
-                    ) : (
-                        <>
-                            <div className="w-24 h-24 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(219,39,119,0.5)]">
-                                {percentage >= 80 ? <Trophy className="w-12 h-12 text-white" /> : <Star className="w-12 h-12 text-white" />}
-                            </div>
-                            
-                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2">{percentage >= 80 ? 'Outstanding!' : percentage >= 50 ? 'Good Job!' : 'Keep Practicing!'}</h2>
-                            <p className="text-gray-700 dark:text-gray-300 mb-8 max-w-sm mx-auto">You have successfully completed the quiz <strong>"{quiz.title}"</strong>.</p>
-                        </>
-                    )}
-                    
-                    <div className="bg-white/80 dark:bg-black/40 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-2xl p-6 w-full max-w-sm flex justify-around shadow-sm">
-                        <div className="text-center">
-                            <p className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1 font-bold">{!result.isEvaluated ? 'Partial Score' : 'Your Score'}</p>
-                            <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-400 to-orange-400">
-                                {result.score}
+
+                            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+                                {!attempt.isEvaluated 
+                                    ? 'Subjective Answers Pending Review' 
+                                    : percentage >= 80 
+                                        ? 'Excellent Performance!' 
+                                        : percentage >= 50 
+                                            ? 'Good Effort!' 
+                                            : 'Keep Practicing!'}
+                            </h2>
+                            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md">
+                                {!attempt.isEvaluated 
+                                    ? 'Your objective responses have been auto-graded. Your teacher will evaluate subjective short answers shortly.' 
+                                    : `You have earned ${attempt.score} out of ${totalPossibleMarks} total marks.`}
                             </p>
                         </div>
-                        <div className="w-px bg-gray-200 dark:bg-white/10" />
-                        <div className="text-center">
-                            <p className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-1 font-bold">Total Marks</p>
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">{quiz.totalMarks}</p>
+
+                        {/* Marks & Percentage Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400">Total Score</p>
+                                <p className="text-2xl font-black text-pink-500 mt-0.5">{attempt.score} <span className="text-xs text-slate-400">/ {totalPossibleMarks}</span></p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400">Percentage</p>
+                                <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{percentage}%</p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400">Evaluation</p>
+                                <p className={`text-xs font-black mt-2 uppercase ${attempt.isEvaluated ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                    {attempt.isEvaluated ? 'Graded' : 'Pending Review'}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400">Submitted</p>
+                                <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-2">
+                                    {new Date(attempt.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
                         </div>
+
+                        {/* Overall Teacher Feedback */}
+                        {attempt.teacherFeedback && (
+                            <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl text-left max-w-2xl mx-auto space-y-1">
+                                <div className="flex items-center gap-1.5 text-xs font-black text-indigo-500 uppercase tracking-wider">
+                                    <MessageSquare className="w-3.5 h-3.5" /> Instructor Evaluation Notes
+                                </div>
+                                <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                    {attempt.teacherFeedback}
+                                </p>
+                            </div>
+                        )}
                     </div>
-                    
-                    {result.teacherFeedback && (
-                        <div className="w-full max-w-md mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-500/30 rounded-xl p-4 text-left">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mb-2">Teacher's Feedback</h4>
-                            <p className="text-sm text-gray-800 dark:text-gray-200">{result.teacherFeedback}</p>
+
+                    {/* Question by Question Review Accordion */}
+                    {questions.length > 0 && (
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+                            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                                <div>
+                                    <h3 className="text-base font-black text-slate-900 dark:text-white">Itemized Question Review</h3>
+                                    <p className="text-xs text-slate-400">Inspect your responses and correct answers.</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowQuestionBreakdown(!showQuestionBreakdown)}
+                                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400"
+                                >
+                                    {showQuestionBreakdown ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                </button>
+                            </div>
+
+                            {showQuestionBreakdown && (
+                                <div className="space-y-6">
+                                    {questions.map((q, idx) => {
+                                        const userAns = attempt.answers?.find(a => a.questionId?.toString() === q._id?.toString() || a.questionId === q._id);
+                                        const marksAwarded = userAns?.marksAwarded || 0;
+                                        const isFullMarks = marksAwarded === q.marks && q.marks > 0;
+                                        const isPartial = marksAwarded > 0 && marksAwarded < q.marks;
+
+                                        return (
+                                            <div key={q._id} className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-4">
+                                                {/* Card Header */}
+                                                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200/60 dark:border-slate-800">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-black text-xs flex items-center justify-center">
+                                                            {idx + 1}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-slate-400 uppercase">
+                                                            {q.type.replace('_', ' ')}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+                                                            isFullMarks ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
+                                                            isPartial ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                                            'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                        }`}>
+                                                            {marksAwarded} / {q.marks} Pts
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Question Prompt */}
+                                                <p className="text-sm font-bold text-slate-900 dark:text-white leading-relaxed">
+                                                    {q.questionText}
+                                                </p>
+
+                                                {/* 1. MCQ Review */}
+                                                {q.type === 'mcq' && (
+                                                    <div className="space-y-2">
+                                                        {q.options.map((opt, oIdx) => {
+                                                            const isUserPick = userAns?.selectedOption === oIdx;
+                                                            const isCorrect = Number(q.correctAnswer) === oIdx;
+
+                                                            return (
+                                                                <div key={oIdx} className={`flex items-center justify-between p-3 rounded-xl border text-xs font-medium ${
+                                                                    isCorrect 
+                                                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300' 
+                                                                        : isUserPick 
+                                                                            ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300' 
+                                                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                                                                }`}>
+                                                                    <div className="flex items-center gap-2.5">
+                                                                        <span className="font-bold">{String.fromCharCode(65 + oIdx)}.</span>
+                                                                        <span>{opt.text}</span>
+                                                                    </div>
+                                                                    {isUserPick && (
+                                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800">Your Selection</span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* 2. Multiple Select Review */}
+                                                {q.type === 'multiple_select' && (
+                                                    <div className="space-y-2">
+                                                        {q.options.map((opt, oIdx) => {
+                                                            const isUserPick = Array.isArray(userAns?.selectedOptions) && userAns.selectedOptions.includes(oIdx);
+                                                            const isCorrect = Array.isArray(q.correctAnswer) && q.correctAnswer.includes(oIdx);
+
+                                                            return (
+                                                                <div key={oIdx} className={`flex items-center justify-between p-3 rounded-xl border text-xs font-medium ${
+                                                                    isCorrect 
+                                                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300' 
+                                                                        : isUserPick 
+                                                                            ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300' 
+                                                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
+                                                                }`}>
+                                                                    <div className="flex items-center gap-2.5">
+                                                                        <span className="font-bold">{String.fromCharCode(65 + oIdx)}.</span>
+                                                                        <span>{opt.text}</span>
+                                                                    </div>
+                                                                    {isUserPick && (
+                                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800">Your Selection</span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* 3. True / False Review */}
+                                                {q.type === 'true_false' && (
+                                                    <div className="grid grid-cols-2 gap-3 text-xs">
+                                                        {[
+                                                            { label: 'True', val: 0 },
+                                                            { label: 'False', val: 1 }
+                                                        ].map(item => {
+                                                            const isUserPick = userAns?.selectedOption === item.val;
+                                                            const isCorrect = Number(q.correctAnswer) === item.val;
+
+                                                            return (
+                                                                <div key={item.val} className={`p-3 rounded-xl border flex items-center justify-between font-bold ${
+                                                                    isCorrect 
+                                                                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' 
+                                                                        : isUserPick 
+                                                                            ? 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400' 
+                                                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500'
+                                                                }`}>
+                                                                    <span>{item.label}</span>
+                                                                    {isUserPick && <span className="text-[10px] uppercase font-black">Your Pick</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* 4. Short Answer Review */}
+                                                {q.type === 'short_answer' && (
+                                                    <div className="space-y-3 text-xs">
+                                                        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
+                                                            <p className="font-bold text-slate-400 uppercase text-[10px]">Your Response:</p>
+                                                            <p className="text-slate-800 dark:text-slate-200 font-medium whitespace-pre-wrap">{userAns?.textAnswer || 'No response entered.'}</p>
+                                                        </div>
+
+                                                        {q.referenceAnswer && (
+                                                            <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-1">
+                                                                <p className="font-bold text-emerald-500 uppercase text-[10px]">Reference Solution / Rubric:</p>
+                                                                <p className="text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap">{q.referenceAnswer}</p>
+                                                            </div>
+                                                        )}
+
+                                                        {userAns?.feedback && (
+                                                            <div className="p-3 bg-indigo-500/5 border border-indigo-500/20 rounded-xl space-y-1">
+                                                                <p className="font-bold text-indigo-500 uppercase text-[10px]">Teacher Feedback:</p>
+                                                                <p className="text-slate-700 dark:text-slate-300 font-medium">{userAns.feedback}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     )}
-                    
-                    <p className="text-sm text-gray-500 mt-6">
-                        Submitted at: {new Date(result.submittedAt).toLocaleString()}
-                    </p>
                 </div>
-            </div>
+            )}
         </div>
     );
 };

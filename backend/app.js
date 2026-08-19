@@ -13,6 +13,8 @@ const chatRoutes = require("./routes/chatRouter");
 const quizRoutes = require("./routes/quizRouter");
 const submissionRoutes = require("./routes/submissionRouter");
 const attendanceRoutes = require("./routes/attendanceRouter");
+const assessmentRoutes = require("./routes/assessmentRouter");
+const analyticsRoutes = require("./routes/analyticsRouter");
 const ChatMessage = require("./models/chatMessage-model");
 const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
@@ -77,6 +79,8 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/quiz", quizRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/assessments", assessmentRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 // Socket Connection Handler
 const usersInRooms = {}; // { roomId: [ { userId, fullname, socketId } ] }

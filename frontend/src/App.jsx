@@ -7,6 +7,7 @@ import SignupPage from './pages/SignupPage'
 import RoomSelectionPage from './pages/RoomSelectionPage'
 import GlobalCalendarPage from './pages/GlobalCalendarPage'
 import AttendancePage from './pages/AttendancePage'
+import AssessmentEnginePage from './pages/AssessmentEnginePage'
 import AppLayout from './components/layout/AppLayout'
 
 import API_BASE_URL from './apiConfig'
@@ -68,6 +69,7 @@ const App = () => {
           <Route path="/room/:roomId" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><HomePage user={user} onLogout={handleLogout} /></AppLayout></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><GlobalCalendarPage user={user} onLogout={handleLogout} /></AppLayout></ProtectedRoute>} />
           <Route path="/attendance" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><AttendancePage user={user} /></AppLayout></ProtectedRoute>} />
+          <Route path="/assessments" element={<ProtectedRoute user={user} authChecked={authChecked}><AppLayout user={user} onLogout={handleLogout}><AssessmentEnginePage user={user} /></AppLayout></ProtectedRoute>} />
         </Routes>
       </div>
     </BrowserRouter>

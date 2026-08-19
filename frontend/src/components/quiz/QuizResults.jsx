@@ -1,13 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import API_BASE_URL from '../../apiConfig';
-import { ArrowLeft, Loader, Users, Target, CheckCircle2, AlertCircle } from 'lucide-react';
+import { 
+    ArrowLeft, 
+    Loader, 
+    Users, 
+    Target, 
+    CheckCircle2, 
+    AlertCircle, 
+    Search, 
+    Filter, 
+    Award, 
+    Clock, 
+    MessageSquare, 
+    Check, 
+    X, 
+    TrendingUp, 
+    FileText,
+    Calendar,
+    Save
+} from 'lucide-react';
 
 const QuizResults = ({ quiz, onBack }) => {
     const [loading, setLoading] = useState(true);
-    const [results, setResults] = useState({ analytics: { totalAttempts: 0, averageScore: 0 }, attempts: [], questions: [] });
+    const [results, setResults] = useState({ analytics: {}, attempts: [], questions: [] });
     const [selectedAttempt, setSelectedAttempt] = useState(null);
-    const [gradeData, setGradeData] = useState({ addedScore: 0, teacherFeedback: '' });
+    const [evaluations, setEvaluations] = useState({}); // { [questionId]: { marksAwarded: number, feedback: string } }
+    const [overallFeedback, setOverallFeedback] = useState('');
     const [submitLoading, setSubmitLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
         fetchResults();
@@ -15,10 +36,11 @@ const QuizResults = ({ quiz, onBack }) => {
 
     const fetchResults = async () => {
         try {
+            setLoading(true);
             const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/results`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                setResults({ analytics: data.analytics, attempts: data.attempts, questions: data.questions || [] });
+                setResults({ analytics: data.analytics || {}, attempts: data.attempts || [], questions: data.questions || [] });
             }
         } catch (err) {
             console.error(err);
@@ -27,182 +49,419 @@ const QuizResults = ({ quiz, onBack }) => {
         }
     };
 
+    const handleSelectAttemptForGrading = (attempt) => {
+        setSelectedAttempt(attempt);
+        setOverallFeedback(attempt.teacherFeedback || '');
+        
+        // Initialize evaluations object from existing attempt answers
+        const initialEvals = {};
+        if (Array.isArray(attempt.answers)) {
+            attempt.answers.forEach(ans => {
+                const qId = ans.questionId?._id || ans.questionId;
+                if (qId) {
+                    initialEvals[qId.toString()] = {
+                        marksAwarded: ans.marksAwarded !== undefined ? ans.marksAwarded : 0,
+                        feedback: ans.feedback || ''
+                    };
+                }
+            });
+        }
+        setEvaluations(initialEvals);
+    };
+
+    const handleQuestionEvalChange = (questionId, field, value) => {
+        setEvaluations(prev => ({
+            ...prev,
+            [questionId]: {
+                ...prev[questionId],
+                [field]: value
+            }
+        }));
+    };
+
     const handleEvaluateSubmit = async () => {
         if (!selectedAttempt) return;
         setSubmitLoading(true);
+
+        const questionEvaluations = Object.entries(evaluations).map(([questionId, data]) => ({
+            questionId,
+            marksAwarded: Number(data.marksAwarded) || 0,
+            feedback: data.feedback || ''
+        }));
+
         try {
-            const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/evaluate/${selectedAttempt._id}`, {
-                method: 'POST',
+            const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/attempt/${selectedAttempt._id}/evaluate`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(gradeData),
+                body: JSON.stringify({
+                    questionEvaluations,
+                    teacherFeedback: overallFeedback
+                }),
                 credentials: 'include'
             });
             const data = await res.json();
             if (data.success) {
-                alert('Evaluation saved successfully!');
+                alert('Evaluation finalized successfully!');
                 setSelectedAttempt(null);
-                fetchResults(); // Refresh table
+                fetchResults();
             } else {
-                alert(data.message);
+                alert(data.message || 'Failed to save evaluation.');
             }
         } catch (err) {
             console.error(err);
+            alert('An error occurred while saving the evaluation.');
         } finally {
             setSubmitLoading(false);
         }
     };
 
     if (loading) {
-        return <div className="flex justify-center p-12"><Loader className="w-8 h-8 animate-spin text-pink-500" /></div>;
+        return (
+            <div className="h-[calc(100vh-180px)] flex items-center justify-center">
+                <Loader className="w-8 h-8 animate-spin text-pink-500" />
+            </div>
+        );
     }
 
+    const { analytics = {}, attempts = [], questions = [] } = results;
+
+    const filteredAttempts = attempts.filter(att => {
+        const studentName = att.studentId?.fullname?.toLowerCase() || '';
+        const studentEmail = att.studentId?.email?.toLowerCase() || '';
+        const matchesQuery = !searchQuery || studentName.includes(searchQuery.toLowerCase()) || studentEmail.includes(searchQuery.toLowerCase());
+        
+        if (statusFilter === 'all') return matchesQuery;
+        if (statusFilter === 'pending') return matchesQuery && att.status === 'submitted';
+        if (statusFilter === 'graded') return matchesQuery && att.status === 'graded';
+        if (statusFilter === 'expired') return matchesQuery && att.status === 'expired';
+        return matchesQuery;
+    });
+
+    const shortAnswerQuestions = questions.filter(q => q.type === 'short_answer');
+
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => selectedAttempt ? setSelectedAttempt(null) : onBack()} className="p-2 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-                </button>
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {selectedAttempt ? `Grade: ${selectedAttempt.studentId.fullname}` : `Results: ${quiz.title}`}
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                        {selectedAttempt ? `Current Score: ${selectedAttempt.score} / ${quiz.totalMarks}` : `Total Marks: ${quiz.totalMarks}`}
-                    </p>
+        <div className="max-w-6xl mx-auto space-y-6 pb-12 animate-fadeIn">
+            {/* Header */}
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                    <button onClick={onBack} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl transition-colors">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                                {quiz.title} — Results & Evaluation
+                            </h2>
+                            <span className="text-xs font-black uppercase px-2.5 py-0.5 rounded-lg bg-pink-500/10 text-pink-500 border border-pink-500/20">
+                                {quiz.topic || 'General'}
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Total Marks: <span className="font-bold text-slate-700 dark:text-slate-300">{quiz.totalMarks}</span> • Time Limit: <span className="font-bold text-slate-700 dark:text-slate-300">{quiz.timeLimit}m</span>
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            {selectedAttempt ? (
-                <div className="space-y-6">
-                    {/* Render Short Answer Questions for grading */}
-                    <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-sm">
-                        <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-amber-500" /> Responses Pending Evaluation
-                        </h3>
-                        
-                        <div className="space-y-6">
-                            {results.questions.filter(q => q.type === 'short_answer').map((q, idx) => {
-                                const ans = selectedAttempt.answers.find(a => a.questionId === q._id);
-                                return (
-                                    <div key={q._id} className="border-l-2 border-pink-500 pl-4 py-2">
-                                        <p className="font-medium text-gray-900 dark:text-gray-200 mb-2">Q: {q.questionText} <span className="text-xs text-gray-500 ml-2">({q.marks} Marks)</span></p>
-                                        
-                                        <div className="bg-gray-50 dark:bg-black/30 rounded-lg p-3 mb-2">
-                                            <p className="text-xs text-gray-500 mb-1 font-bold uppercase">Student's Answer</p>
-                                            <p className="text-sm text-gray-800 dark:text-gray-300">{ans?.textAnswer || <span className="italic text-gray-400">No answer provided</span>}</p>
-                                        </div>
-                                        
-                                        {q.referenceAnswer && (
-                                            <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-lg p-3 border border-emerald-100 dark:border-emerald-900/30">
-                                                <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-1 font-bold uppercase">Reference Answer</p>
-                                                <p className="text-sm text-gray-800 dark:text-gray-300">{q.referenceAnswer}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
+            {/* Analytics Overview Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-slate-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">Submissions</span>
+                        <Users className="w-4 h-4 text-indigo-500" />
                     </div>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics.totalAttempts || 0}</p>
+                    <p className="text-[11px] text-slate-400 font-medium">{analytics.gradedCount || 0} Graded • {analytics.pendingCount || 0} Pending</p>
+                </div>
 
-                    <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Add Marks</label>
-                            <input
-                                type="number"
-                                value={gradeData.addedScore}
-                                onChange={e => setGradeData({ ...gradeData, addedScore: Number(e.target.value) })}
-                                className="w-full bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none text-gray-900 dark:text-white"
-                                placeholder="Enter marks to add..."
-                            />
-                            <p className="text-xs text-gray-500 mt-1">This will be added to the auto-graded score of {selectedAttempt.score}.</p>
-                        </div>
-                        <div>
-                            <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wider font-bold">Teacher Feedback</label>
-                            <textarea
-                                value={gradeData.teacherFeedback}
-                                onChange={e => setGradeData({ ...gradeData, teacherFeedback: e.target.value })}
-                                className="w-full bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-xl px-4 py-2 focus:border-pink-500 outline-none h-24 resize-none text-gray-900 dark:text-white"
-                                placeholder="Great explanation, but you missed..."
-                            />
-                        </div>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-slate-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">Average Score</span>
+                        <Target className="w-4 h-4 text-pink-500" />
                     </div>
+                    <p className="text-2xl font-black text-pink-600 dark:text-pink-400">{analytics.averageScore || 0} <span className="text-xs text-slate-400 font-normal">/ {quiz.totalMarks}</span></p>
+                    <p className="text-[11px] text-slate-400 font-medium">Class Avg: {analytics.averagePercentage || 0}%</p>
+                </div>
 
-                    <button
-                        onClick={handleEvaluateSubmit}
-                        disabled={submitLoading}
-                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"
-                    >
-                        {submitLoading ? <Loader className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5" /> Submit Evaluation</>}
-                    </button>
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-slate-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">Highest Score</span>
+                        <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <p className="text-2xl font-black text-emerald-500">{analytics.highestScore || 0} <span className="text-xs text-slate-400 font-normal">pts</span></p>
+                    <p className="text-[11px] text-slate-400 font-medium">Lowest: {analytics.lowestScore || 0} pts</p>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-slate-400">
+                        <span className="text-[10px] font-black uppercase tracking-wider">Action Needed</span>
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <p className="text-2xl font-black text-amber-500">{analytics.pendingCount || 0}</p>
+                    <p className="text-[11px] text-slate-400 font-medium">Pending manual grading</p>
+                </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-2xl shadow-sm">
+                <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+                    <Search className="w-4 h-4 text-slate-400 ml-1" />
+                    <input
+                        type="text"
+                        placeholder="Search student by name or email..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none font-medium"
+                    />
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+                    {[
+                        { id: 'all', label: 'All Attempts' },
+                        { id: 'pending', label: `Pending Review (${analytics.pendingCount || 0})` },
+                        { id: 'graded', label: 'Graded' },
+                        { id: 'expired', label: 'Expired' }
+                    ].map(f => (
+                        <button
+                            key={f.id}
+                            onClick={() => setStatusFilter(f.id)}
+                            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                                statusFilter === f.id 
+                                    ? 'bg-pink-600 text-white shadow-md shadow-pink-500/20' 
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Student Attempts Table */}
+            {filteredAttempts.length === 0 ? (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center text-slate-500 dark:text-slate-400 shadow-sm">
+                    <Users className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
+                    <p className="font-bold text-base text-slate-800 dark:text-slate-200">No student attempts found</p>
+                    <p className="text-xs text-slate-400 mt-1">Attempts submitted by students will appear here for grading.</p>
                 </div>
             ) : (
-                <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-purple-50 dark:bg-gradient-to-br dark:from-purple-600/20 dark:to-cyan-600/20 border border-gray-200 dark:border-white/10 rounded-2xl p-6 flex items-center gap-4">
-                    <div className="p-4 bg-purple-100 dark:bg-purple-500/20 rounded-xl"><Users className="w-8 h-8 text-purple-600 dark:text-purple-400" /></div>
-                    <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Total Attempts</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{results.analytics.totalAttempts}</p>
-                    </div>
-                </div>
-                <div className="bg-pink-50 dark:bg-gradient-to-br dark:from-pink-600/20 dark:to-orange-600/20 border border-gray-200 dark:border-white/10 rounded-2xl p-6 flex items-center gap-4">
-                    <div className="p-4 bg-pink-100 dark:bg-pink-500/20 rounded-xl"><Target className="w-8 h-8 text-pink-600 dark:text-pink-400" /></div>
-                    <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Average Score</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{results.analytics.averageScore.toFixed(1)} <span className="text-lg text-gray-500">/ {quiz.totalMarks}</span></p>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white dark:bg-[#0f0f12] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden mt-8 shadow-sm">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10">
-                            <th className="p-4 font-bold text-sm text-gray-700 dark:text-gray-300">Student Name</th>
-                            <th className="p-4 font-bold text-sm text-gray-700 dark:text-gray-300">Email</th>
-                            <th className="p-4 font-bold text-sm text-gray-700 dark:text-gray-300 text-center">Status</th>
-                            <th className="p-4 font-bold text-sm text-gray-700 dark:text-gray-300 text-right">Score</th>
-                            <th className="p-4 font-bold text-sm text-gray-700 dark:text-gray-300">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {results.attempts.length === 0 ? (
-                            <tr>
-                                <td colSpan="4" className="p-8 text-center text-gray-500">No attempts yet.</td>
+                <div className="overflow-x-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 text-[11px] font-black uppercase tracking-wider text-slate-400">
+                                <th className="p-4 pl-6">Student</th>
+                                <th className="p-4 text-center">Attempt</th>
+                                <th className="p-4 text-center">Submitted At</th>
+                                <th className="p-4 text-center">Objective Score</th>
+                                <th className="p-4 text-center">Total Score</th>
+                                <th className="p-4 text-center">Status</th>
+                                <th className="p-4 text-right pr-6">Action</th>
                             </tr>
-                        ) : (
-                            results.attempts.map(attempt => (
-                                <tr key={attempt._id} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-gray-900 dark:text-gray-200">
-                                    <td className="p-4 font-medium">{attempt.studentId.fullname}</td>
-                                    <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{attempt.studentId.email}</td>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs font-medium text-slate-800 dark:text-slate-200">
+                            {filteredAttempts.map(att => (
+                                <tr key={att._id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                    <td className="p-4 pl-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 flex items-center justify-center font-bold text-xs shrink-0">
+                                                {att.studentId?.fullname?.[0]?.toUpperCase() || 'S'}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-slate-900 dark:text-white">{att.studentId?.fullname || 'Unknown Student'}</p>
+                                                <p className="text-[11px] text-slate-400">{att.studentId?.email}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    <td className="p-4 text-center font-bold">
+                                        #{att.attemptNumber}
+                                    </td>
+
+                                    <td className="p-4 text-center text-slate-500 dark:text-slate-400">
+                                        {att.submittedAt ? new Date(att.submittedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                    </td>
+
+                                    <td className="p-4 text-center font-bold text-slate-600 dark:text-slate-300">
+                                        {att.objectiveMarks !== undefined ? att.objectiveMarks : att.score} pts
+                                    </td>
+
                                     <td className="p-4 text-center">
-                                        {attempt.isEvaluated ? (
-                                            <span className="text-xs font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-2 py-1 rounded-full">Evaluated</span>
-                                        ) : (
-                                            <span className="text-xs font-bold text-amber-600 bg-amber-100 dark:bg-amber-500/20 px-2 py-1 rounded-full">Needs Grading</span>
-                                        )}
+                                        <span className="font-black text-sm text-pink-600 dark:text-pink-400">
+                                            {att.score}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-bold ml-1">
+                                            ({att.percentage || 0}%)
+                                        </span>
                                     </td>
-                                    <td className="p-4 text-right">
-                                        <span className="font-bold text-pink-400">{attempt.score}</span> / {quiz.totalMarks}
+
+                                    <td className="p-4 text-center">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                            att.status === 'graded' 
+                                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                                : att.status === 'submitted' 
+                                                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
+                                                    : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                        }`}>
+                                            {att.status === 'submitted' ? 'Needs Review' : att.status}
+                                        </span>
                                     </td>
-                                    <td className="p-4">
-                                        <button 
-                                            onClick={() => {
-                                                setSelectedAttempt(attempt);
-                                                setGradeData({ addedScore: 0, teacherFeedback: attempt.teacherFeedback || '' });
-                                            }}
-                                            className="text-sm font-bold text-pink-600 hover:text-pink-500 transition-colors"
+
+                                    <td className="p-4 pr-6 text-right">
+                                        <button
+                                            onClick={() => handleSelectAttemptForGrading(att)}
+                                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                                att.status === 'submitted'
+                                                    ? 'bg-pink-600 hover:bg-pink-700 text-white shadow-md shadow-pink-600/20'
+                                                    : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                            }`}
                                         >
-                                            View & Grade
+                                            {att.status === 'submitted' ? 'Grade Short Answers' : 'Review Attempt'}
                                         </button>
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
-                </>
+            )}
+
+            {/* ========================================================================= */}
+            {/* TEACHER EVALUATION MODAL / DRAWER                                         */}
+            {/* ========================================================================= */}
+            {selectedAttempt && (
+                <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl space-y-6 animate-scaleUp">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                                    Evaluating: {selectedAttempt.studentId?.fullname} (Attempt #{selectedAttempt.attemptNumber})
+                                </h3>
+                                <p className="text-xs text-slate-400">
+                                    Current Score: <span className="font-bold text-pink-500">{selectedAttempt.score}</span> / {quiz.totalMarks} • Status: <span className="uppercase font-bold">{selectedAttempt.status}</span>
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedAttempt(null)}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-slate-400"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Subjective Short Answers Grading Section */}
+                        {shortAnswerQuestions.length > 0 ? (
+                            <div className="space-y-6">
+                                <h4 className="text-xs font-black uppercase tracking-wider text-pink-500 flex items-center gap-1.5">
+                                    <FileText className="w-4 h-4" /> Subjective Questions Requiring Teacher Evaluation
+                                </h4>
+
+                                {shortAnswerQuestions.map((q, idx) => {
+                                    const userAns = selectedAttempt.answers?.find(a => a.questionId?.toString() === q._id?.toString() || a.questionId === q._id);
+                                    const currentAward = evaluations[q._id.toString()]?.marksAwarded ?? (userAns?.marksAwarded || 0);
+                                    const currentFeedback = evaluations[q._id.toString()]?.feedback ?? (userAns?.feedback || '');
+
+                                    return (
+                                        <div key={q._id} className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-4">
+                                            <div className="flex justify-between items-start gap-3">
+                                                <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                                    <span className="text-pink-500 mr-2">Q{idx + 1}.</span> {q.questionText}
+                                                </p>
+                                                <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                                                    Max {q.marks} Pts
+                                                </span>
+                                            </div>
+
+                                            {/* Student's answer */}
+                                            <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
+                                                <p className="text-[10px] font-black uppercase text-slate-400">Student Response:</p>
+                                                <p className="text-xs text-slate-800 dark:text-slate-200 font-medium whitespace-pre-wrap">
+                                                    {userAns?.textAnswer || <span className="italic text-slate-400">No response provided.</span>}
+                                                </p>
+                                            </div>
+
+                                            {/* Reference answer */}
+                                            {q.referenceAnswer && (
+                                                <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-1">
+                                                    <p className="text-[10px] font-black uppercase text-emerald-500">Grading Rubric / Reference:</p>
+                                                    <p className="text-xs text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap">
+                                                        {q.referenceAnswer}
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Teacher Scoring Inputs */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                                                <div>
+                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
+                                                        Marks (0 - {q.marks})
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max={q.marks}
+                                                        value={currentAward}
+                                                        onChange={(e) => handleQuestionEvalChange(q._id.toString(), 'marksAwarded', Math.min(q.marks, Math.max(0, Number(e.target.value))))}
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-pink-500"
+                                                    />
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">
+                                                        Question Specific Feedback
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={currentFeedback}
+                                                        onChange={(e) => handleQuestionEvalChange(q._id.toString(), 'feedback', e.target.value)}
+                                                        placeholder="Provide constructive feedback for this answer..."
+                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-pink-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                                All questions in this quiz are objective and have been automatically graded.
+                            </div>
+                        )}
+
+                        {/* Overall Attempt Feedback */}
+                        <div>
+                            <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1">
+                                <MessageSquare className="w-3.5 h-3.5 text-indigo-500" /> Overall Teacher Remarks / Feedback
+                            </label>
+                            <textarea
+                                value={overallFeedback}
+                                onChange={(e) => setOverallFeedback(e.target.value)}
+                                placeholder="Add overall assessment remarks visible to the student..."
+                                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 text-xs outline-none focus:border-pink-500 h-20 resize-none text-slate-900 dark:text-white font-medium"
+                            />
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedAttempt(null)}
+                                className="px-5 py-2.5 rounded-xl text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleEvaluateSubmit}
+                                disabled={submitLoading}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                            >
+                                {submitLoading ? <Loader className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Finalize & Save Evaluation
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

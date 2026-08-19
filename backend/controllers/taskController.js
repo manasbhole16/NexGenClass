@@ -1,4 +1,6 @@
 const Task = require("../models/task-model");
+const Room = require("../models/room-model");
+const Submission = require("../models/submission-model");
 const { sendMail } = require("../utils/mailer");
 const { isAiConfigured } = require("../utils/aiClient");
 const { generateTaskDraftFromPrompt } = require("../services/aiGeneration");
@@ -6,28 +8,45 @@ const { generateTaskDraftFromPrompt } = require("../services/aiGeneration");
 // Create Task
 module.exports.createTask = async (req, res) => {
     try {
-        console.log("== CREATE TASK START ==");
-        console.log("Body:", req.body);
-        console.log("User:", req.user?._id);
+        const {
+            title, description, priority, tags, dueDate, status, order, roomId,
+            maxMarks, taskType, category, topic, subtasks, rubric, attachments,
+            isDraft, scheduledPublishAt, assignedTo
+        } = req.body;
 
-        const { title, description, priority, tags, dueDate, status, order, roomId, maxMarks, taskType, category, subtasks, rubric } = req.body;
+        if (!title || !title.trim()) {
+            return res.status(400).json({ message: "Title is required" });
+        }
 
-        if (!title) return res.status(400).json({ message: "Title is required" });
+        const isPersonal = !roomId || roomId === 'personal';
 
-        const isPersonal = roomId === 'personal';
+        // Server-Side RBAC Check for Classroom Tasks
+        if (!isPersonal) {
+            const room = await Room.findById(roomId);
+            if (!room) {
+                return res.status(404).json({ message: "Classroom not found" });
+            }
 
-        // Log the decision
-        console.log("Is Personal Mode:", isPersonal);
+            const isOwner = room.owner.toString() === req.user._id.toString();
+            const isRoomTeacher = req.user.role === 'teacher' && (isOwner || room.members.some(m => m.toString() === req.user._id.toString()));
+
+            if (!isOwner && !isRoomTeacher) {
+                return res.status(403).json({ message: "Forbidden: Only the classroom instructor can create classroom assignments." });
+            }
+        }
+
+        const draftFlag = Boolean(isDraft);
+        const publishedDate = draftFlag ? null : new Date();
 
         const task = await Task.create({
-            title,
-            description,
+            title: title.trim(),
+            description: (description || '').trim(),
             priority: priority || 'Medium',
-            tags: tags || [],
-            dueDate: dueDate || null,
+            tags: Array.isArray(tags) ? tags : [],
+            dueDate: dueDate ? new Date(dueDate) : null,
             status: status || 'Todo',
             order: order || 0,
-            room: (isPersonal || !roomId) ? null : roomId,
+            room: isPersonal ? null : roomId,
             owner: req.user._id,
             subtasks: Array.isArray(subtasks)
                 ? subtasks
@@ -43,38 +62,35 @@ module.exports.createTask = async (req, res) => {
                     }))
                     .filter(r => r.criterion)
                 : [],
-            maxMarks: maxMarks || 100,
+            maxMarks: Number.isFinite(Number(maxMarks)) ? Number(maxMarks) : 100,
             taskType: taskType || 'assignment',
-            category: category || ''
+            category: (category || '').trim(),
+            topic: (topic || 'General').trim() || 'General',
+            attachments: Array.isArray(attachments) ? attachments : [],
+            isDraft: draftFlag,
+            scheduledPublishAt: scheduledPublishAt ? new Date(scheduledPublishAt) : null,
+            publishedAt: publishedDate,
+            assignedTo: Array.isArray(assignedTo) ? assignedTo : []
         });
 
-        console.log("Task saved to DB:", task._id);
+        // Only emit and notify if not a draft
+        if (!draftFlag) {
+            if (req.io) {
+                if (!isPersonal) {
+                    req.io.to(roomId).emit("taskCreated", task);
+                } else {
+                    req.io.emit("taskCreated", task);
+                }
+            }
 
-        if (req.io) {
-            req.io.emit("taskCreated", task);
-            console.log("Socket event taskCreated emitted");
-        }
-
-        if (req.user?.email) {
-            const scopeLabel = task.room ? "Class task" : "Personal task";
-            const dueLabel = task.dueDate ? new Date(task.dueDate).toLocaleString() : "No due date";
-            const text = [
-                `Hi ${req.user.fullname || "there"},`,
-                "",
-                "A new task was created.",
-                `Title: ${task.title}`,
-                `Type: ${task.taskType || "assignment"}`,
-                `Scope: ${scopeLabel}`,
-                `Due: ${dueLabel}`
-            ].join("\n");
-
-            sendMail({
-                to: req.user.email,
-                subject: `New task: ${task.title}`,
-                text
-            }).catch((err) => {
-                console.error("New task email failed:", err.message);
-            });
+            if (req.user?.email && isPersonal) {
+                const dueLabel = task.dueDate ? new Date(task.dueDate).toLocaleString() : "No due date";
+                sendMail({
+                    to: req.user.email,
+                    subject: `New personal task: ${task.title}`,
+                    text: `Task created: ${task.title}\nDue: ${dueLabel}`
+                }).catch(() => {});
+            }
         }
 
         res.status(201).json({ success: true, task });
@@ -87,26 +103,86 @@ module.exports.createTask = async (req, res) => {
 // Get Tasks
 module.exports.getTasks = async (req, res) => {
     try {
-        const { roomId } = req.query;
-        console.log("== GET TASKS START ==", { roomId });
+        const { roomId, topic, taskType, status } = req.query;
 
         let query = {};
 
         if (roomId === 'personal') {
             query = { room: null, owner: req.user._id };
         } else if (roomId === 'all') {
-            const Room = require("../models/room-model");
             const rooms = await Room.find({ members: req.user._id });
             const roomIds = rooms.map(r => r._id);
-            query = { $or: [{ room: null, owner: req.user._id }, { room: { $in: roomIds } }] };
+
+            if (req.user.role === 'student') {
+                query = {
+                    $or: [
+                        { room: null, owner: req.user._id },
+                        {
+                            room: { $in: roomIds },
+                            isDraft: { $ne: true },
+                            $or: [
+                                { assignedTo: { $exists: false } },
+                                { assignedTo: { $size: 0 } },
+                                { assignedTo: req.user._id }
+                            ]
+                        }
+                    ]
+                };
+            } else {
+                query = {
+                    $or: [
+                        { room: null, owner: req.user._id },
+                        { room: { $in: roomIds } }
+                    ]
+                };
+            }
         } else if (roomId) {
-            query = { room: roomId };
+            const room = await Room.findById(roomId);
+            if (!room) return res.status(404).json({ message: "Classroom not found" });
+
+            const isMember = room.members.some(m => m.toString() === req.user._id.toString());
+            const isOwner = room.owner.toString() === req.user._id.toString();
+
+            if (!isMember && !isOwner) {
+                return res.status(403).json({ message: "Access denied to this classroom" });
+            }
+
+            const isTeacher = isOwner || req.user.role === 'teacher';
+
+            if (!isTeacher) {
+                // Students can only see published assignments assigned to them
+                query = {
+                    room: roomId,
+                    isDraft: { $ne: true },
+                    $or: [
+                        { assignedTo: { $exists: false } },
+                        { assignedTo: { $size: 0 } },
+                        { assignedTo: req.user._id }
+                    ]
+                };
+            } else {
+                // Teachers see all tasks in their room
+                query = { room: roomId };
+            }
         } else {
             return res.status(400).json({ message: "Room ID or personal flag required" });
         }
 
-        const tasks = await Task.find(query).sort({ order: 1, createdAt: -1 });
-        console.log(`Found ${tasks.length} tasks`);
+        // Apply optional filters
+        if (topic && topic !== 'All') {
+            query.topic = topic;
+        }
+        if (taskType) {
+            query.taskType = taskType;
+        }
+        if (status) {
+            query.status = status;
+        }
+
+        const tasks = await Task.find(query)
+            .populate('owner', 'fullname email role')
+            .sort({ order: 1, createdAt: -1 });
+
         res.json({ success: true, count: tasks.length, tasks });
     } catch (err) {
         console.error("Get Tasks Error:", err.message);
@@ -117,8 +193,24 @@ module.exports.getTasks = async (req, res) => {
 // Update Task
 module.exports.updateTask = async (req, res) => {
     try {
-        let task = await Task.findById(req.params.id);
+        const task = await Task.findById(req.params.id);
         if (!task) return res.status(404).json({ message: "Task not found" });
+
+        // Server-Side RBAC
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            const isOwner = room && room.owner.toString() === req.user._id.toString();
+            const isTaskOwner = task.owner && task.owner.toString() === req.user._id.toString();
+            const isRoomTeacher = req.user.role === 'teacher' && room && (isOwner || room.members.some(m => m.toString() === req.user._id.toString()));
+
+            if (!isOwner && !isTaskOwner && !isRoomTeacher) {
+                return res.status(403).json({ message: "Forbidden: You are not authorized to edit this classroom task." });
+            }
+        } else {
+            if (task.owner.toString() !== req.user._id.toString()) {
+                return res.status(403).json({ message: "Forbidden: You can only edit your own personal tasks." });
+            }
+        }
 
         if (req.body.dueDate !== undefined) {
             const incomingDueDate = req.body.dueDate ? new Date(req.body.dueDate).toISOString() : null;
@@ -128,12 +220,25 @@ module.exports.updateTask = async (req, res) => {
             }
         }
 
-        task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        // If publishing a draft
+        if (task.isDraft && req.body.isDraft === false) {
+            req.body.publishedAt = new Date();
+        }
 
-        if (req.io) req.io.emit("taskUpdated", task);
+        const updatedTask = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
-        res.json({ success: true, task });
+        if (req.io) {
+            const roomTarget = updatedTask.room ? updatedTask.room.toString() : 'personal';
+            if (updatedTask.room) {
+                req.io.to(roomTarget).emit("taskUpdated", updatedTask);
+            } else {
+                req.io.emit("taskUpdated", updatedTask);
+            }
+        }
+
+        res.json({ success: true, task: updatedTask });
     } catch (err) {
+        console.error("Task Update Error:", err.message);
         res.status(500).json({ message: err.message });
     }
 };
@@ -141,12 +246,38 @@ module.exports.updateTask = async (req, res) => {
 // Delete Task
 module.exports.deleteTask = async (req, res) => {
     try {
-        const task = await Task.findByIdAndDelete(req.params.id);
+        const task = await Task.findById(req.params.id);
         if (!task) return res.status(404).json({ message: "Task not found" });
 
-        if (req.io) req.io.emit("taskDeleted", { id: req.params.id, roomId: task.room || 'personal' });
+        // Server-Side RBAC
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            const isOwner = room && room.owner.toString() === req.user._id.toString();
+            const isTaskOwner = task.owner && task.owner.toString() === req.user._id.toString();
+            const isRoomTeacher = req.user.role === 'teacher' && room && (isOwner || room.members.some(m => m.toString() === req.user._id.toString()));
 
-        res.json({ success: true, message: "Task deleted" });
+            if (!isOwner && !isTaskOwner && !isRoomTeacher) {
+                return res.status(403).json({ message: "Forbidden: You are not authorized to delete this classroom task." });
+            }
+        } else {
+            if (task.owner.toString() !== req.user._id.toString()) {
+                return res.status(403).json({ message: "Forbidden: You can only delete your own personal tasks." });
+            }
+        }
+
+        await Task.findByIdAndDelete(req.params.id);
+        await Submission.deleteMany({ taskId: req.params.id });
+
+        if (req.io) {
+            const roomTarget = task.room ? task.room.toString() : 'personal';
+            if (task.room) {
+                req.io.to(roomTarget).emit("taskDeleted", { id: req.params.id, roomId: roomTarget });
+            } else {
+                req.io.emit("taskDeleted", { id: req.params.id, roomId: 'personal' });
+            }
+        }
+
+        res.json({ success: true, message: "Task deleted successfully" });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
