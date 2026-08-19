@@ -16,6 +16,7 @@ const attendanceRoutes = require("./routes/attendanceRouter");
 const assessmentRoutes = require("./routes/assessmentRouter");
 const analyticsRoutes = require("./routes/analyticsRouter");
 const notificationRoutes = require("./routes/notificationRouter");
+const liveSessionRoutes = require("./routes/liveSessionRouter");
 const ChatMessage = require("./models/chatMessage-model");
 const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
@@ -83,6 +84,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/assessments", assessmentRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/live-sessions", liveSessionRoutes);
 
 // Socket Connection Handler
 const usersInRooms = {}; // { roomId: [ { userId, fullname, socketId } ] }
