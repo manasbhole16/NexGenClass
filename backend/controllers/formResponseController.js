@@ -175,7 +175,11 @@ module.exports.submitResponse = async (req, res) => {
             return res.status(403).json({ success: false, message: "You are not enrolled in this classroom." });
         }
 
-        // Check Form status
+        // Check Form status & archive
+        if (form.archived) {
+            return res.status(400).json({ success: false, message: "This form has been archived and is no longer accepting responses." });
+        }
+
         if (form.status === 'draft') {
             return res.status(403).json({ success: false, message: "Cannot submit to a draft form." });
         }
@@ -308,6 +312,10 @@ module.exports.editResponse = async (req, res) => {
         // Check if editing allowed
         if (!form.allowResponseEditing) {
             return res.status(403).json({ success: false, message: "Response editing is disabled for this form." });
+        }
+
+        if (form.archived) {
+            return res.status(400).json({ success: false, message: "This form has been archived. Edits cannot be submitted." });
         }
 
         if (form.status === 'closed') {

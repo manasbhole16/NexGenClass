@@ -44,6 +44,8 @@ const notificationSchema = new mongoose.Schema(
                 "form_published",
                 "form_response_submitted",
                 "form_graded",
+                "form_closed",
+                "form_archived",
                 // Stream / Announcements
                 "announcement_created",
                 "announcement_comment",

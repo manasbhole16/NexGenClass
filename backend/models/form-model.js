@@ -14,8 +14,7 @@ const formSchema = new mongoose.Schema({
     roomId: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Room', 
-        required: true,
-        index: true
+        required: true
     },
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
@@ -60,10 +59,19 @@ const formSchema = new mongoose.Schema({
         type: Number,
         default: 0,
         min: 0
+    },
+    isTemplate: {
+        type: Boolean,
+        default: false
+    },
+    archived: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 
 formSchema.index({ roomId: 1, status: 1 });
 formSchema.index({ roomId: 1, createdAt: -1 });
+formSchema.index({ roomId: 1, archived: 1, isTemplate: 1, status: 1 });
 
 module.exports = mongoose.model("Form", formSchema);

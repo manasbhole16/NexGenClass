@@ -17,8 +17,16 @@ router.delete('/:id', formController.deleteForm);
 router.post('/:id/questions', formController.saveQuestions);
 router.put('/:id/questions', formController.saveQuestions);
 
-// Publishing lifecycle
+// Publishing & Lifecycle
 router.post('/:id/publish', formController.publishForm);
+router.post('/:id/close', formController.closeForm);
+router.post('/:id/archive', formController.archiveForm);
+router.post('/:id/unarchive', formController.unarchiveForm);
+
+// Advanced Form Operations: Duplicate & Templates
+router.post('/:id/duplicate', formController.duplicateForm);
+router.post('/:id/template', formController.createTemplate);
+router.post('/:id/from-template', formController.createFromTemplate);
 
 // Student Response Endpoints
 router.post('/:id/responses', formResponseController.submitResponse);
@@ -42,4 +50,3 @@ router.get('/:id/export/csv', formResponseController.exportCSV);
 router.get('/:id/export/xlsx', formResponseController.exportXLSX);
 
 module.exports = router;
-

@@ -75,7 +75,8 @@ module.exports.createForm = async (req, res) => {
             allowResponseEditing,
             limitOneResponse,
             collectEmail,
-            showResultsImmediately
+            showResultsImmediately,
+            isTemplate
         } = req.body;
 
         if (!title || typeof title !== 'string' || !title.trim()) {
@@ -129,7 +130,9 @@ module.exports.createForm = async (req, res) => {
             limitOneResponse: limitOneResponse !== undefined ? !!limitOneResponse : true,
             collectEmail: collectEmail !== undefined ? !!collectEmail : true,
             showResultsImmediately: showResultsImmediately !== undefined ? !!showResultsImmediately : true,
-            totalMarks: 0
+            totalMarks: 0,
+            isTemplate: !!isTemplate,
+            archived: false
         });
 
         res.status(201).json({
@@ -142,7 +145,7 @@ module.exports.createForm = async (req, res) => {
     }
 };
 
-// 2. Get Forms by Room
+// 2. Get Forms by Room (with search, filtering, and sorting)
 module.exports.getFormsByRoom = async (req, res) => {
     try {
         const { roomId } = req.params;
@@ -162,13 +165,65 @@ module.exports.getFormsByRoom = async (req, res) => {
 
         const isTeacher = await isAuthorizedTeacher(req.user, roomId);
 
+        const {
+            status,
+            archived,
+            isTemplate,
+            topic,
+            search,
+            sort
+        } = req.query;
+
         let query = { roomId };
+
         if (!isTeacher) {
+            // Students only see active, non-archived, non-template forms that are published or closed
+            query.archived = false;
+            query.isTemplate = false;
             query.status = { $in: ['published', 'closed'] };
+        } else {
+            // Teachers can filter by archive state, template, and status
+            if (archived === 'true') {
+                query.archived = true;
+            } else if (archived === 'false') {
+                query.archived = false;
+            }
+
+            if (isTemplate === 'true') {
+                query.isTemplate = true;
+            } else if (isTemplate === 'false') {
+                query.isTemplate = false;
+            }
+
+            if (status && status !== 'All') {
+                query.status = status;
+            }
+        }
+
+        if (topic && topic !== 'All') {
+            query.topic = topic;
+        }
+
+        if (search && search.trim()) {
+            query.$or = [
+                { title: { $regex: search.trim(), $options: 'i' } },
+                { description: { $regex: search.trim(), $options: 'i' } },
+                { topic: { $regex: search.trim(), $options: 'i' } }
+            ];
+        }
+
+        // Sorting
+        let sortOption = { createdAt: -1 };
+        if (sort === 'oldest') {
+            sortOption = { createdAt: 1 };
+        } else if (sort === 'title') {
+            sortOption = { title: 1 };
+        } else if (sort === 'updated') {
+            sortOption = { updatedAt: -1 };
         }
 
         const forms = await Form.find(query)
-            .sort({ createdAt: -1 })
+            .sort(sortOption)
             .populate('createdBy', 'fullname email role');
 
         res.json({
@@ -200,8 +255,16 @@ module.exports.getFormById = async (req, res) => {
 
         const isTeacher = await isAuthorizedTeacher(req.user, form.roomId, form.createdBy);
 
-        if (!isTeacher && form.status === 'draft') {
-            return res.status(403).json({ success: false, message: "Access denied. This form is currently in draft mode." });
+        if (!isTeacher) {
+            if (form.status === 'draft') {
+                return res.status(403).json({ success: false, message: "Access denied. This form is currently in draft mode." });
+            }
+            if (form.archived) {
+                return res.status(403).json({ success: false, message: "Access denied. This form has been archived." });
+            }
+            if (form.isTemplate) {
+                return res.status(403).json({ success: false, message: "Access denied. This is a template." });
+            }
         }
 
         const rawQuestions = await FormQuestion.find({ formId: id }).sort({ order: 1, createdAt: 1 }).lean();
@@ -254,7 +317,9 @@ module.exports.updateForm = async (req, res) => {
             allowResponseEditing,
             limitOneResponse,
             collectEmail,
-            showResultsImmediately
+            showResultsImmediately,
+            isTemplate,
+            archived
         } = req.body;
 
         if (title !== undefined) {
@@ -302,6 +367,8 @@ module.exports.updateForm = async (req, res) => {
         if (limitOneResponse !== undefined) form.limitOneResponse = !!limitOneResponse;
         if (collectEmail !== undefined) form.collectEmail = !!collectEmail;
         if (showResultsImmediately !== undefined) form.showResultsImmediately = !!showResultsImmediately;
+        if (isTemplate !== undefined) form.isTemplate = !!isTemplate;
+        if (archived !== undefined) form.archived = !!archived;
 
         await form.save();
 
@@ -450,7 +517,330 @@ module.exports.publishForm = async (req, res) => {
     }
 };
 
-// 7. Delete Form
+// 7. Close Form
+module.exports.closeForm = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Form ID." });
+        }
+
+        const form = await Form.findById(id);
+        if (!form) {
+            return res.status(404).json({ success: false, message: "Form not found." });
+        }
+
+        const authorized = await isAuthorizedTeacher(req.user, form.roomId, form.createdBy);
+        if (!authorized) {
+            return res.status(403).json({ success: false, message: "Not authorized to close this form." });
+        }
+
+        form.status = 'closed';
+        await form.save();
+
+        res.json({
+            success: true,
+            message: "Form closed successfully.",
+            form
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 8. Archive Form
+module.exports.archiveForm = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Form ID." });
+        }
+
+        const form = await Form.findById(id);
+        if (!form) {
+            return res.status(404).json({ success: false, message: "Form not found." });
+        }
+
+        const authorized = await isAuthorizedTeacher(req.user, form.roomId, form.createdBy);
+        if (!authorized) {
+            return res.status(403).json({ success: false, message: "Not authorized to archive this form." });
+        }
+
+        form.archived = true;
+        await form.save();
+
+        res.json({
+            success: true,
+            message: "Form archived successfully.",
+            form
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 9. Unarchive Form
+module.exports.unarchiveForm = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Form ID." });
+        }
+
+        const form = await Form.findById(id);
+        if (!form) {
+            return res.status(404).json({ success: false, message: "Form not found." });
+        }
+
+        const authorized = await isAuthorizedTeacher(req.user, form.roomId, form.createdBy);
+        if (!authorized) {
+            return res.status(403).json({ success: false, message: "Not authorized to unarchive this form." });
+        }
+
+        form.archived = false;
+        await form.save();
+
+        res.json({
+            success: true,
+            message: "Form unarchived successfully.",
+            form
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 10. Duplicate Form
+module.exports.duplicateForm = async (req, res) => {
+    let newForm = null;
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Form ID." });
+        }
+
+        const form = await Form.findById(id);
+        if (!form) {
+            return res.status(404).json({ success: false, message: "Form not found." });
+        }
+
+        const authorized = await isAuthorizedTeacher(req.user, form.roomId, form.createdBy);
+        if (!authorized) {
+            return res.status(403).json({ success: false, message: "Not authorized to duplicate this form." });
+        }
+
+        const customTitle = req.body?.title ? req.body.title.trim() : `Copy of ${form.title}`;
+
+        // 1. Create duplicate form document (starts as draft, no responses, same room)
+        newForm = await Form.create({
+            title: customTitle,
+            description: form.description,
+            roomId: form.roomId,
+            createdBy: req.user._id,
+            topic: form.topic,
+            status: 'draft',
+            startAt: null,
+            endAt: null,
+            allowResponseEditing: form.allowResponseEditing,
+            limitOneResponse: form.limitOneResponse,
+            collectEmail: form.collectEmail,
+            showResultsImmediately: form.showResultsImmediately,
+            totalMarks: form.totalMarks || 0,
+            isTemplate: false,
+            archived: false
+        });
+
+        // 2. Fetch original questions
+        const originalQuestions = await FormQuestion.find({ formId: id }).sort({ order: 1, createdAt: 1 });
+
+        // 3. Duplicate questions
+        const duplicateQuestionsData = originalQuestions.map(q => ({
+            formId: newForm._id,
+            questionText: q.questionText,
+            description: q.description,
+            type: q.type,
+            options: (q.options || []).map(opt => ({ text: typeof opt === 'string' ? opt : opt.text })),
+            required: q.required,
+            marks: q.marks !== undefined ? q.marks : 1,
+            correctAnswer: q.correctAnswer || '',
+            correctAnswers: q.correctAnswers || [],
+            order: q.order
+        }));
+
+        let savedQuestions = [];
+        if (duplicateQuestionsData.length > 0) {
+            savedQuestions = await FormQuestion.insertMany(duplicateQuestionsData);
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "Form duplicated successfully.",
+            form: newForm,
+            questions: savedQuestions
+        });
+    } catch (error) {
+        // Cleanup if error occurred during question duplication
+        if (newForm && newForm._id) {
+            await Form.findByIdAndDelete(newForm._id).catch(() => {});
+            await FormQuestion.deleteMany({ formId: newForm._id }).catch(() => {});
+        }
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 11. Create Template Copy of Form
+module.exports.createTemplate = async (req, res) => {
+    let templateForm = null;
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Form ID." });
+        }
+
+        const form = await Form.findById(id);
+        if (!form) {
+            return res.status(404).json({ success: false, message: "Form not found." });
+        }
+
+        const authorized = await isAuthorizedTeacher(req.user, form.roomId, form.createdBy);
+        if (!authorized) {
+            return res.status(403).json({ success: false, message: "Not authorized to create a template from this form." });
+        }
+
+        const templateTitle = req.body?.title ? req.body.title.trim() : `${form.title} (Template)`;
+
+        templateForm = await Form.create({
+            title: templateTitle,
+            description: form.description,
+            roomId: form.roomId,
+            createdBy: req.user._id,
+            topic: form.topic,
+            status: 'draft',
+            startAt: null,
+            endAt: null,
+            allowResponseEditing: form.allowResponseEditing,
+            limitOneResponse: form.limitOneResponse,
+            collectEmail: form.collectEmail,
+            showResultsImmediately: form.showResultsImmediately,
+            totalMarks: form.totalMarks || 0,
+            isTemplate: true,
+            archived: false
+        });
+
+        const originalQuestions = await FormQuestion.find({ formId: id }).sort({ order: 1, createdAt: 1 });
+        const templateQuestionsData = originalQuestions.map(q => ({
+            formId: templateForm._id,
+            questionText: q.questionText,
+            description: q.description,
+            type: q.type,
+            options: (q.options || []).map(opt => ({ text: typeof opt === 'string' ? opt : opt.text })),
+            required: q.required,
+            marks: q.marks !== undefined ? q.marks : 1,
+            correctAnswer: q.correctAnswer || '',
+            correctAnswers: q.correctAnswers || [],
+            order: q.order
+        }));
+
+        let savedQuestions = [];
+        if (templateQuestionsData.length > 0) {
+            savedQuestions = await FormQuestion.insertMany(templateQuestionsData);
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "Template created successfully.",
+            form: templateForm,
+            questions: savedQuestions
+        });
+    } catch (error) {
+        if (templateForm && templateForm._id) {
+            await Form.findByIdAndDelete(templateForm._id).catch(() => {});
+            await FormQuestion.deleteMany({ formId: templateForm._id }).catch(() => {});
+        }
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 12. Create Form from Template
+module.exports.createFromTemplate = async (req, res) => {
+    let newForm = null;
+    try {
+        const { id } = req.params; // template ID
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: "Invalid Template Form ID." });
+        }
+
+        const templateForm = await Form.findById(id);
+        if (!templateForm) {
+            return res.status(404).json({ success: false, message: "Template form not found." });
+        }
+
+        const targetRoomId = req.body?.roomId || templateForm.roomId;
+        if (!targetRoomId || !mongoose.Types.ObjectId.isValid(targetRoomId)) {
+            return res.status(400).json({ success: false, message: "Valid target roomId is required." });
+        }
+
+        // Verify authorized in target classroom
+        const authorized = await isAuthorizedTeacher(req.user, targetRoomId);
+        if (!authorized) {
+            return res.status(403).json({ success: false, message: "Not authorized to create forms in the target classroom." });
+        }
+
+        const formTitle = req.body?.title ? req.body.title.trim() : templateForm.title.replace(' (Template)', '');
+
+        newForm = await Form.create({
+            title: formTitle,
+            description: templateForm.description,
+            roomId: targetRoomId,
+            createdBy: req.user._id,
+            topic: templateForm.topic,
+            status: 'draft',
+            startAt: null,
+            endAt: null,
+            allowResponseEditing: templateForm.allowResponseEditing,
+            limitOneResponse: templateForm.limitOneResponse,
+            collectEmail: templateForm.collectEmail,
+            showResultsImmediately: templateForm.showResultsImmediately,
+            totalMarks: templateForm.totalMarks || 0,
+            isTemplate: false,
+            archived: false
+        });
+
+        const templateQuestions = await FormQuestion.find({ formId: id }).sort({ order: 1, createdAt: 1 });
+        const newQuestionsData = templateQuestions.map(q => ({
+            formId: newForm._id,
+            questionText: q.questionText,
+            description: q.description,
+            type: q.type,
+            options: (q.options || []).map(opt => ({ text: typeof opt === 'string' ? opt : opt.text })),
+            required: q.required,
+            marks: q.marks !== undefined ? q.marks : 1,
+            correctAnswer: q.correctAnswer || '',
+            correctAnswers: q.correctAnswers || [],
+            order: q.order
+        }));
+
+        let savedQuestions = [];
+        if (newQuestionsData.length > 0) {
+            savedQuestions = await FormQuestion.insertMany(newQuestionsData);
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "New form created from template successfully.",
+            form: newForm,
+            questions: savedQuestions
+        });
+    } catch (error) {
+        if (newForm && newForm._id) {
+            await Form.findByIdAndDelete(newForm._id).catch(() => {});
+            await FormQuestion.deleteMany({ formId: newForm._id }).catch(() => {});
+        }
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 13. Delete Form
 module.exports.deleteForm = async (req, res) => {
     try {
         const { id } = req.params;
