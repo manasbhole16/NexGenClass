@@ -46,6 +46,12 @@ const notificationSchema = new mongoose.Schema(
                 "form_graded",
                 "form_closed",
                 "form_archived",
+                "form_collaborator_added",
+                "form_collaborator_removed",
+                "form_access_granted",
+                "form_access_revoked",
+                "form_response_flagged",
+                "form_response_reviewed",
                 // Stream / Announcements
                 "announcement_created",
                 "announcement_comment",

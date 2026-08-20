@@ -10,7 +10,12 @@ import {
     Save,
     CheckCircle2,
     Clock,
-    AlertCircle
+    AlertCircle,
+    Shuffle,
+    Sliders,
+    MessageSquare,
+    Send,
+    Shield
 } from 'lucide-react';
 
 const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] }) => {
@@ -34,6 +39,19 @@ const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] 
     const [allowResponseEditing, setAllowResponseEditing] = useState(
         form?.allowResponseEditing !== undefined ? form.allowResponseEditing : false
     );
+    const [confirmationMessage, setConfirmationMessage] = useState(
+        form?.confirmationMessage || 'Your response has been recorded.'
+    );
+    const [submitButtonText, setSubmitButtonText] = useState(form?.submitButtonText || 'Submit');
+    const [showProgressBar, setShowProgressBar] = useState(
+        form?.showProgressBar !== undefined ? form.showProgressBar : true
+    );
+    const [shuffleQuestions, setShuffleQuestions] = useState(!!form?.shuffleQuestions);
+    const [shuffleOptions, setShuffleOptions] = useState(!!form?.shuffleOptions);
+    const [allowDraftSaving, setAllowDraftSaving] = useState(
+        form?.allowDraftSaving !== undefined ? form.allowDraftSaving : true
+    );
+
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
@@ -50,6 +68,12 @@ const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] 
             setAllowResponseEditing(
                 form.allowResponseEditing !== undefined ? form.allowResponseEditing : false
             );
+            setConfirmationMessage(form.confirmationMessage || 'Your response has been recorded.');
+            setSubmitButtonText(form.submitButtonText || 'Submit');
+            setShowProgressBar(form.showProgressBar !== undefined ? form.showProgressBar : true);
+            setShuffleQuestions(!!form.shuffleQuestions);
+            setShuffleOptions(!!form.shuffleOptions);
+            setAllowDraftSaving(form.allowDraftSaving !== undefined ? form.allowDraftSaving : true);
         }
     }, [form]);
 
@@ -69,7 +93,7 @@ const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] 
             return;
         }
 
-        const chosenTopic = topic === 'custom' ? (customTopic.trim() || 'General') : topic;
+        const chosenTopic = topic === 'custom' ? customTopic.trim() || 'General' : topic;
 
         setSaving(true);
         try {
@@ -82,7 +106,13 @@ const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] 
                 endAt: endAt ? new Date(endAt).toISOString() : null,
                 collectEmail,
                 limitOneResponse,
-                allowResponseEditing
+                allowResponseEditing,
+                confirmationMessage: confirmationMessage.trim(),
+                submitButtonText: submitButtonText.trim() || 'Submit',
+                showProgressBar,
+                shuffleQuestions,
+                shuffleOptions,
+                allowDraftSaving
             });
             onClose();
         } catch (err) {
@@ -103,7 +133,7 @@ const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] 
                         </div>
                         <div>
                             <h3 className="font-bold text-base text-gray-900 dark:text-white">Form Settings</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Configure response and availability settings</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">Configure response and presentation options</p>
                         </div>
                     </div>
                     <button
@@ -152,163 +182,197 @@ const FormSettingsModal = ({ isOpen, onClose, form, onSave, existingTopics = [] 
                                 placeholder="Enter custom topic name..."
                                 value={customTopic}
                                 onChange={(e) => setCustomTopic(e.target.value)}
-                                className="mt-2 w-full px-3.5 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
+                                className="w-full mt-2 px-3.5 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
                             />
                         )}
                     </div>
 
-                    {/* Status */}
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-purple-500" /> Form Lifecycle Status
+                    {/* Response Controls */}
+                    <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider">Responses & Submissions</h4>
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Mail className="w-3.5 h-3.5 text-purple-500" /> Collect Email Addresses
+                                </span>
+                                <p className="text-[11px] text-gray-400">Record respondent email automatically with submission</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={collectEmail}
+                                onChange={(e) => setCollectEmail(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
                         </label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {[
-                                { id: 'draft', label: 'Draft', desc: 'Teacher only' },
-                                { id: 'published', label: 'Published', desc: 'Open' },
-                                { id: 'closed', label: 'Closed', desc: 'No responses' }
-                            ].map((st) => (
-                                <button
-                                    key={st.id}
-                                    type="button"
-                                    onClick={() => setStatus(st.id)}
-                                    className={`py-2.5 px-3 rounded-xl border text-center transition-all ${
-                                        status === st.id
-                                            ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/20'
-                                            : 'bg-gray-50 dark:bg-[#222228] border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:border-gray-300'
-                                    }`}
-                                >
-                                    <div className="text-xs font-bold">{st.label}</div>
-                                    <div className="text-[10px] opacity-75">{st.desc}</div>
-                                </button>
-                            ))}
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Lock className="w-3.5 h-3.5 text-purple-500" /> Limit to 1 Response
+                                </span>
+                                <p className="text-[11px] text-gray-400">Require students to submit at most once</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={limitOneResponse}
+                                onChange={(e) => setLimitOneResponse(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Edit3 className="w-3.5 h-3.5 text-purple-500" /> Allow Response Editing
+                                </span>
+                                <p className="text-[11px] text-gray-400">Respondents can modify their answers after submit</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={allowResponseEditing}
+                                onChange={(e) => setAllowResponseEditing(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Save className="w-3.5 h-3.5 text-purple-500" /> Enable Draft Autosave
+                                </span>
+                                <p className="text-[11px] text-gray-400">Automatically save student answers as drafts while filling</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={allowDraftSaving}
+                                onChange={(e) => setAllowDraftSaving(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                        </label>
+                    </div>
+
+                    {/* Presentation & Shuffling */}
+                    <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider">Presentation & Randomization</h4>
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Sliders className="w-3.5 h-3.5 text-purple-500" /> Show Progress Bar
+                                </span>
+                                <p className="text-[11px] text-gray-400">Show section progress bar on multi-section forms</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={showProgressBar}
+                                onChange={(e) => setShowProgressBar(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Shuffle className="w-3.5 h-3.5 text-purple-500" /> Shuffle Questions Order
+                                </span>
+                                <p className="text-[11px] text-gray-400">Display questions in randomized order for each student</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={shuffleQuestions}
+                                onChange={(e) => setShuffleQuestions(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                        </label>
+
+                        <label className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-200 dark:border-white/5 cursor-pointer">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                                    <Shuffle className="w-3.5 h-3.5 text-purple-500" /> Shuffle Options Order
+                                </span>
+                                <p className="text-[11px] text-gray-400">Randomize multiple choice / checkbox options</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={shuffleOptions}
+                                onChange={(e) => setShuffleOptions(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                        </label>
+                    </div>
+
+                    {/* Custom Confirmation & Submit Text */}
+                    <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider">Confirmation Screen</h4>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-purple-500" /> Confirmation Message
+                            </label>
+                            <input
+                                type="text"
+                                value={confirmationMessage}
+                                onChange={(e) => setConfirmationMessage(e.target.value)}
+                                placeholder="Your response has been recorded."
+                                className="w-full px-3.5 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                <Send className="w-3.5 h-3.5 text-purple-500" /> Custom Submit Button Text
+                            </label>
+                            <input
+                                type="text"
+                                value={submitButtonText}
+                                onChange={(e) => setSubmitButtonText(e.target.value)}
+                                placeholder="Submit"
+                                className="w-full px-3.5 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
+                            />
                         </div>
                     </div>
 
-                    {/* Availability Schedule */}
-                    <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-white/5">
-                        <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 text-purple-500" /> Availability Window (Optional)
-                        </label>
+                    {/* Schedule / Timing */}
+                    <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-white/5">
+                        <h4 className="text-xs font-black uppercase text-gray-400 tracking-wider">Availability Windows</h4>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <span className="text-[11px] text-gray-500 block mb-1">Start Date & Time</span>
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-gray-500">Open Date & Time:</label>
                                 <input
                                     type="datetime-local"
                                     value={startAt}
                                     onChange={(e) => setStartAt(e.target.value)}
-                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
+                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
                                 />
                             </div>
-                            <div>
-                                <span className="text-[11px] text-gray-500 block mb-1">End Date & Time</span>
+                            <div className="space-y-1">
+                                <label className="text-[11px] font-bold text-gray-500">Close Date & Time:</label>
                                 <input
                                     type="datetime-local"
                                     value={endAt}
                                     onChange={(e) => setEndAt(e.target.value)}
-                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
+                                    className="w-full px-3 py-2 bg-gray-50 dark:bg-[#222228] border border-gray-200 dark:border-white/10 rounded-xl text-xs font-semibold text-gray-800 dark:text-gray-200 outline-none focus:border-purple-500"
                                 />
                             </div>
                         </div>
                     </div>
 
-                    {/* Response Controls */}
-                    <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-white/5">
-                        <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                            Response Controls
-                        </h4>
-
-                        {/* Collect Email */}
-                        <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-100 dark:border-white/5">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                                    <Mail className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <div className="text-xs font-bold text-gray-800 dark:text-gray-200">Collect Email Addresses</div>
-                                    <div className="text-[11px] text-gray-500">Record respondent email on submission</div>
-                                </div>
-                            </div>
-                            <div
-                                onClick={() => setCollectEmail(!collectEmail)}
-                                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                                    collectEmail ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-700'
-                                }`}
-                            >
-                                <div
-                                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                                        collectEmail ? 'translate-x-4' : 'translate-x-0'
-                                    }`}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Limit to 1 response */}
-                        <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-100 dark:border-white/5">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                                    <Lock className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <div className="text-xs font-bold text-gray-800 dark:text-gray-200">Limit to 1 response</div>
-                                    <div className="text-[11px] text-gray-500">Respondents will be required to sign in</div>
-                                </div>
-                            </div>
-                            <div
-                                onClick={() => setLimitOneResponse(!limitOneResponse)}
-                                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                                    limitOneResponse ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-700'
-                                }`}
-                            >
-                                <div
-                                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                                        limitOneResponse ? 'translate-x-4' : 'translate-x-0'
-                                    }`}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Allow response editing */}
-                        <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#222228]/50 border border-gray-100 dark:border-white/5">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                                    <Edit3 className="w-4 h-4" />
-                                </div>
-                                <div>
-                                    <div className="text-xs font-bold text-gray-800 dark:text-gray-200">Allow Response Editing</div>
-                                    <div className="text-[11px] text-gray-500">Respondents can edit responses after submit</div>
-                                </div>
-                            </div>
-                            <div
-                                onClick={() => setAllowResponseEditing(!allowResponseEditing)}
-                                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                                    allowResponseEditing ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-700'
-                                }`}
-                            >
-                                <div
-                                    className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                                        allowResponseEditing ? 'translate-x-4' : 'translate-x-0'
-                                    }`}
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Submit Button */}
-                    <div className="pt-4 border-t border-gray-100 dark:border-white/10 flex justify-end gap-2">
+                    {/* Footer Actions */}
+                    <div className="pt-4 border-t border-gray-100 dark:border-white/10 flex items-center justify-end gap-3">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"
+                            className="px-4 py-2.5 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold transition-all"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={saving}
-                            className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-600/20 transition-all disabled:opacity-50"
+                            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md shadow-purple-500/20 disabled:opacity-50 transition-all flex items-center gap-1.5"
                         >
-                            <Save className="w-3.5 h-3.5" />
                             {saving ? 'Saving...' : 'Save Settings'}
                         </button>
                     </div>

@@ -479,6 +479,77 @@ const FormAnalytics = ({ formId, roomId, onBack }) => {
                                 </div>
                             )}
 
+                            {/* Linear Scale Analytics */}
+                            {q.questionType === 'linear_scale' && (
+                                <div className="space-y-3 pt-2">
+                                    <div className="flex items-center justify-between p-3.5 bg-purple-50/70 dark:bg-purple-500/10 rounded-2xl border border-purple-200 dark:border-purple-500/20">
+                                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300">Average Rating</span>
+                                        <span className="text-xl font-black text-purple-700 dark:text-purple-300">
+                                            {q.scaleAverage !== undefined ? q.scaleAverage : '—'} / {q.scaleMax || 5}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-2 pt-1">
+                                        {(q.scaleDistribution || []).map((dist) => (
+                                            <div key={dist.rating} className="space-y-1">
+                                                <div className="flex items-center justify-between text-xs font-semibold">
+                                                    <span>Rating {dist.rating}</span>
+                                                    <span className="text-gray-500">{dist.count} ({dist.percentage}%)</span>
+                                                </div>
+                                                <div className="h-2 w-full bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-purple-600 rounded-full" style={{ width: `${dist.percentage}%` }} />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Date Analytics */}
+                            {q.questionType === 'date' && (
+                                <div className="space-y-2 pt-2">
+                                    <div className="text-xs font-bold text-gray-500">Submitted Dates ({q.dateValues?.length || 0}):</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(q.dateValues || []).map((d, dIdx) => (
+                                            <span key={dIdx} className="px-3 py-1 bg-gray-100 dark:bg-white/5 rounded-lg text-xs font-semibold">
+                                                {d}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Time Analytics */}
+                            {q.questionType === 'time' && (
+                                <div className="space-y-2 pt-2">
+                                    <div className="text-xs font-bold text-gray-500">Submitted Times ({q.timeValues?.length || 0}):</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {(q.timeValues || []).map((t, tIdx) => (
+                                            <span key={tIdx} className="px-3 py-1 bg-gray-100 dark:bg-white/5 rounded-lg text-xs font-semibold">
+                                                {t}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* File Upload Analytics */}
+                            {q.questionType === 'file_upload' && (
+                                <div className="space-y-2 pt-2">
+                                    <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#222228] rounded-xl text-xs font-bold">
+                                        <span>Total Files Uploaded</span>
+                                        <span className="text-purple-600 font-black">{q.uploadedFilesCount || 0}</span>
+                                    </div>
+                                    <div className="max-h-40 overflow-y-auto space-y-1.5 pt-1">
+                                        {(q.files || []).map((f, fIdx) => (
+                                            <div key={fIdx} className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-[#222228] rounded-xl border border-gray-200 dark:border-white/5 text-xs">
+                                                <span className="font-semibold truncate max-w-xs">{f.fileName}</span>
+                                                <a href={f.fileUrl} download={f.fileName} className="text-purple-600 font-bold hover:underline">Download</a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Text Response List for Descriptive Questions */}
                             {['short_answer', 'paragraph'].includes(q.questionType) && (
                                 <div className="space-y-3 pt-2">

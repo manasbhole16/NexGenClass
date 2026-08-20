@@ -29,13 +29,15 @@ import {
     XCircle,
     ArrowUpDown,
     Check,
-    Sparkles
+    Sparkles,
+    Share2
 } from 'lucide-react';
 import FormBuilder from './FormBuilder';
 import FormPreview from './FormPreview';
 import FormResponse from './FormResponse';
 import FormResponses from './FormResponses';
 import FormAnalytics from './FormAnalytics';
+import FormShareModal from './FormShareModal';
 
 const FormModule = ({ roomId, user, roomDetails }) => {
     const [view, setView] = useState('list'); // 'list' | 'builder' | 'preview' | 'response' | 'responses' | 'analytics'
@@ -43,6 +45,7 @@ const FormModule = ({ roomId, user, roomDetails }) => {
     const [loading, setLoading] = useState(true);
     const [selectedFormId, setSelectedFormId] = useState(null);
     const [previewData, setPreviewData] = useState({ form: null, questions: [] });
+    const [shareModalForm, setShareModalForm] = useState(null);
     
     // Search, Filter & Sort
     const [searchQuery, setSearchQuery] = useState('');
@@ -644,6 +647,19 @@ const FormModule = ({ roomId, user, roomDetails }) => {
                                                 <Users className="w-4 h-4" />
                                             </button>
 
+                                            {/* Share & Access */}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setShareModalForm(f);
+                                                }}
+                                                className="p-1.5 text-gray-400 hover:text-purple-500 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-500/10 transition-colors"
+                                                title="Share & Access Control"
+                                            >
+                                                <Share2 className="w-4 h-4" />
+                                            </button>
+
                                             {/* Preview */}
                                             <button
                                                 type="button"
@@ -812,6 +828,19 @@ const FormModule = ({ roomId, user, roomDetails }) => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Share & Collaborators Modal */}
+            {shareModalForm && (
+                <FormShareModal
+                    isOpen={!!shareModalForm}
+                    onClose={() => setShareModalForm(null)}
+                    form={shareModalForm}
+                    roomId={roomId}
+                    onUpdateForm={() => {
+                        fetchForms();
+                    }}
+                />
             )}
         </div>
     );
