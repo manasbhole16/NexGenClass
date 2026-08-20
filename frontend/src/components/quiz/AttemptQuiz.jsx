@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import API_BASE_URL from '../../apiConfig';
 import { 
     ArrowLeft, 
@@ -17,8 +17,11 @@ import {
     Layers, 
     Sparkles, 
     Save, 
-    Check,
-    RotateCcw
+    Check, 
+    RotateCcw,
+    ShieldAlert,
+    ShieldCheck,
+    Image
 } from 'lucide-react';
 
 const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
@@ -38,6 +41,11 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
     const [answers, setAnswers] = useState([]); // [{ questionId, selectedOption, selectedOptions, textAnswer }]
     const [flaggedQuestions, setFlaggedQuestions] = useState([]); // [questionId]
 
+    // Safe Mode / Exam Monitoring Telemetry
+    const [safeModeEnabled, setSafeModeEnabled] = useState(false);
+    const [suspiciousWarningCount, setSuspiciousWarningCount] = useState(0);
+    const [showSafeModeWarningToast, setShowSafeModeWarningToast] = useState(false);
+
     // Timer State (Server Synchronized)
     const [timeLeft, setTimeLeft] = useState(quiz.timeLimit * 60);
     const timerRef = useRef(null);
@@ -53,7 +61,6 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         const checkActiveAttempt = async () => {
             try {
                 setLoading(true);
-                // Call start attempt (retrieves active attempt if already started)
                 const res = await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/start`, {
                     method: 'POST',
                     credentials: 'include'
@@ -64,6 +71,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                     setQuestions(data.questions || []);
                     setAttemptId(data.attempt._id);
                     setTimeLeft(data.attempt.remainingSeconds);
+                    setSafeModeEnabled(!!data.attempt.safeMode || !!data.quiz?.safeMode);
 
                     if (Array.isArray(data.attempt.savedAnswers) && data.attempt.savedAnswers.length > 0) {
                         setAnswers(data.attempt.savedAnswers);
@@ -72,7 +80,6 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                         setFlaggedQuestions(data.attempt.flaggedQuestions.map(id => id.toString()));
                     }
 
-                    // If attempt was already in progress and remaining time is valid, jump straight into exam
                     if (data.attempt.status === 'in_progress' && data.attempt.savedAnswers?.length > 0) {
                         setStage('in_exam');
                     }
@@ -110,7 +117,47 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         };
     }, [stage]);
 
-    // Periodic Background Autosave Interval (every 15 seconds during exam)
+    // Safe Mode Integrity Event Listener (Tab switch / blur detection)
+    useEffect(() => {
+        if (stage !== 'in_exam' || !safeModeEnabled) return;
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                logSafeModeViolation('tab_switch', 'Student switched browser tab or minimized window');
+            }
+        };
+
+        const handleWindowBlur = () => {
+            logSafeModeViolation('window_blur', 'Exam window lost active focus');
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('blur', handleWindowBlur);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('blur', handleWindowBlur);
+        };
+    }, [stage, safeModeEnabled, quiz._id]);
+
+    const logSafeModeViolation = async (eventType, details) => {
+        setSuspiciousWarningCount(prev => prev + 1);
+        setShowSafeModeWarningToast(true);
+        setTimeout(() => setShowSafeModeWarningToast(false), 4000);
+
+        try {
+            await fetch(`${API_BASE_URL}/api/quiz/${quiz._id}/log-event`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventType, details }),
+                credentials: 'include'
+            });
+        } catch (err) {
+            console.error("Failed to log integrity telemetry:", err);
+        }
+    };
+
+    // Background autosave interval (every 15 seconds)
     useEffect(() => {
         if (stage !== 'in_exam') return;
         const interval = setInterval(() => {
@@ -119,7 +166,6 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         return () => clearInterval(interval);
     }, [stage]);
 
-    // Autosave helper to push progress to backend
     const persistProgressToServer = async (currentAnswers, currentFlags) => {
         try {
             setAutoSaveStatus('saving');
@@ -139,12 +185,11 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                 setAutoSaveStatus('error');
             }
         } catch (err) {
-            console.error("Autosave failed:", err);
+            console.error("Autosave error:", err);
             setAutoSaveStatus('error');
         }
     };
 
-    // Debounced autosave on user interaction
     const triggerDebouncedAutosave = (newAnswers, newFlags) => {
         if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
         setAutoSaveStatus('saving');
@@ -166,6 +211,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                 setQuestions(data.questions || []);
                 setAttemptId(data.attempt._id);
                 setTimeLeft(data.attempt.remainingSeconds);
+                setSafeModeEnabled(!!data.attempt.safeMode || !!data.quiz?.safeMode);
                 if (Array.isArray(data.attempt.savedAnswers)) {
                     setAnswers(data.attempt.savedAnswers);
                 }
@@ -184,7 +230,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         }
     };
 
-    // Single Answer Change Handlers
+    // Answer Handlers for all 6 question types
     const handleMCQChange = (questionId, optIdx) => {
         const existing = answers.find(a => a.questionId === questionId);
         let nextAnswers;
@@ -217,7 +263,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         triggerDebouncedAutosave(nextAnswers, flaggedQuestions);
     };
 
-    const handleShortAnswerChange = (questionId, text) => {
+    const handleTextAnswerChange = (questionId, text) => {
         const existing = answers.find(a => a.questionId === questionId);
         let nextAnswers;
         if (existing) {
@@ -240,7 +286,6 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
         triggerDebouncedAutosave(answers, nextFlags);
     };
 
-    // Auto-submission when time runs out
     const handleAutoSubmit = () => {
         submitFinalExam(true);
     };
@@ -278,11 +323,12 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
 
     const currentQuestion = questions[currentIdx];
 
-    // Progress computation
     const answeredCount = questions.filter(q => {
         const ans = answers.find(a => a.questionId === q._id);
         if (!ans) return false;
-        if (q.type === 'short_answer') return ans.textAnswer && ans.textAnswer.trim().length > 0;
+        if (q.type === 'short_answer' || q.type === 'long_answer' || q.type === 'fill_blank') {
+            return ans.textAnswer && ans.textAnswer.trim().length > 0;
+        }
         if (q.type === 'multiple_select') return Array.isArray(ans.selectedOptions) && ans.selectedOptions.length > 0;
         return ans.selectedOption !== null && ans.selectedOption !== undefined;
     }).length;
@@ -308,29 +354,37 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                     <button onClick={onBack} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl transition-colors">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <span className="text-xs font-black uppercase tracking-wider text-pink-500">Classroom Assessment Portal</span>
+                    <span className="text-xs font-black uppercase tracking-wider text-pink-500">Academic Assessment Portal</span>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden space-y-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                         <span className="text-xs font-black uppercase px-3 py-1 rounded-xl bg-pink-500/10 text-pink-500 border border-pink-500/20">
                             {quizData.topic || 'General Examination'}
                         </span>
-                        <span className="text-xs font-bold text-slate-400">
-                            Allowed Attempts: <span className="text-slate-700 dark:text-slate-200">{quizData.allowedAttempts || 1}</span>
-                        </span>
+                        <div className="flex items-center gap-2">
+                            {safeModeEnabled && (
+                                <span className="text-xs font-black uppercase px-2.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1">
+                                    <ShieldAlert className="w-3.5 h-3.5" /> Safe Exam Mode
+                                </span>
+                            )}
+                            <span className="text-xs font-bold text-slate-400">
+                                Allowed Attempts: <span className="text-slate-700 dark:text-slate-200">{quizData.allowedAttempts || 1}</span>
+                            </span>
+                        </div>
                     </div>
 
-                    <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3">
-                        {quizData.title}
-                    </h1>
-
-                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-8">
-                        {quizData.description || "Read each question carefully. Once started, the timer runs continuously on the server and cannot be paused. Your answers auto-save as you make progress."}
-                    </p>
+                    <div>
+                        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mb-2">
+                            {quizData.title}
+                        </h1>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                            {quizData.description || "Read each question carefully. Once started, the timer runs continuously on the server and cannot be paused. Your answers auto-save as you make progress."}
+                        </p>
+                    </div>
 
                     {/* Parameters Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl mb-8">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl">
                         <div>
                             <p className="text-[10px] font-black uppercase text-slate-400">Questions</p>
                             <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">{questions.length || quizData.totalQuestions || 'Multiple'}</p>
@@ -344,25 +398,25 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                             <p className="text-lg font-black text-amber-500 mt-0.5">{quizData.timeLimit} Mins</p>
                         </div>
                         <div>
-                            <p className="text-[10px] font-black uppercase text-slate-400">Due Deadline</p>
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-1 line-clamp-1">
-                                {new Date(quizData.deadline).toLocaleDateString()}
+                            <p className="text-[10px] font-black uppercase text-slate-400">Passing Score</p>
+                            <p className="text-lg font-black text-emerald-500 mt-0.5">
+                                {quizData.passingMarks ? `${quizData.passingMarks} Pts` : 'None'}
                             </p>
                         </div>
                     </div>
 
-                    {/* Guidelines Alert */}
-                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3.5 mb-8">
-                        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                        <div className="text-xs text-amber-600 dark:text-amber-400/90 leading-relaxed space-y-1">
-                            <p className="font-bold">Important Instructions:</p>
-                            <ul className="list-disc list-inside space-y-0.5 text-slate-600 dark:text-slate-400">
-                                <li>The examination countdown is calculated directly on the server.</li>
-                                <li>Refreshing your browser will restore your answers and maintain the countdown.</li>
-                                <li>The assessment automatically finalizes and grades upon timer expiration.</li>
-                            </ul>
+                    {/* Safe Mode Alert */}
+                    {safeModeEnabled && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3.5">
+                            <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed space-y-1">
+                                <p className="font-bold">Exam Integrity Monitoring Active:</p>
+                                <p className="text-slate-600 dark:text-slate-400">
+                                    This assessment runs with Safe Exam Mode. Switching tabs, opening other windows, or losing window focus is logged and provided to your teacher for review.
+                                </p>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Start Action */}
                     <button
@@ -371,7 +425,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                         className="w-full py-4 bg-pink-600 hover:bg-pink-700 text-white font-black text-base rounded-2xl transition-all shadow-xl shadow-pink-600/30 flex items-center justify-center gap-2 active:scale-98"
                     >
                         {loading ? <Loader className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                        Start Quiz Assessment
+                        Start Assessment
                     </button>
                 </div>
             </div>
@@ -382,7 +436,15 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
     // STAGE 2: ACTIVE EXAM RUNNER
     // ==========================================
     return (
-        <div className="max-w-6xl mx-auto space-y-6 animate-fadeIn pb-12">
+        <div className="max-w-6xl mx-auto space-y-6 animate-fadeIn pb-12 relative">
+            {/* Safe Mode Warning Toast */}
+            {showSafeModeWarningToast && (
+                <div className="fixed top-6 right-6 z-50 bg-amber-600 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold animate-bounce">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Focus lost! Tab switch event logged ({suspiciousWarningCount}).</span>
+                </div>
+            )}
+
             {/* Top Examination Header & Server Timer Bar */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20 backdrop-blur-xl">
                 <div className="flex items-center gap-3 min-w-0">
@@ -392,9 +454,11 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
                             <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">{quizData.title}</h2>
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 hidden sm:inline-block">
-                                {quizData.topic || 'General'}
-                            </span>
+                            {safeModeEnabled && (
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 hidden sm:inline-block">
+                                    Safe Mode
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs text-slate-400">Question {currentIdx + 1} of {questions.length}</p>
                     </div>
@@ -422,7 +486,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                         <span>{formatTime(timeLeft)}</span>
                     </div>
 
-                    {/* Finish / Review Button */}
+                    {/* Submit / Finish Button */}
                     <button
                         onClick={() => setStage('confirm_submit')}
                         className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-2xl font-bold text-xs sm:text-sm transition-all shadow-md shadow-pink-600/20 active:scale-95 flex items-center gap-1.5"
@@ -433,24 +497,28 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                 </div>
             </div>
 
-            {/* Main Exam Grid: Question Navigator (Left) + Question Display (Right) */}
+            {/* Main Exam Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Left Column: Question Palette & Metrics (4 cols) */}
+                {/* Left Column: Navigator & Legend (4 cols) */}
                 <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-5">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                         <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Exam Navigator</h3>
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{answeredCount} / {questions.length} Answered</span>
                     </div>
 
-                    {/* Palette Grid */}
+                    {/* Question Palette Grid */}
                     <div className="grid grid-cols-5 sm:grid-cols-6 lg:grid-cols-5 gap-2">
                         {questions.map((q, idx) => {
                             const ans = answers.find(a => a.questionId === q._id);
                             let isAnswered = false;
                             if (ans) {
-                                if (q.type === 'short_answer') isAnswered = !!(ans.textAnswer && ans.textAnswer.trim().length > 0);
-                                else if (q.type === 'multiple_select') isAnswered = !!(Array.isArray(ans.selectedOptions) && ans.selectedOptions.length > 0);
-                                else isAnswered = ans.selectedOption !== null && ans.selectedOption !== undefined;
+                                if (q.type === 'short_answer' || q.type === 'long_answer' || q.type === 'fill_blank') {
+                                    isAnswered = !!(ans.textAnswer && ans.textAnswer.trim().length > 0);
+                                } else if (q.type === 'multiple_select') {
+                                    isAnswered = !!(Array.isArray(ans.selectedOptions) && ans.selectedOptions.length > 0);
+                                } else {
+                                    isAnswered = ans.selectedOption !== null && ans.selectedOption !== undefined;
+                                }
                             }
                             const isFlagged = flaggedQuestions.includes(q._id.toString());
                             const isCurrent = idx === currentIdx;
@@ -496,7 +564,7 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                     </div>
                 </div>
 
-                {/* Right Column: Question Statement & Interactive Options (8 cols) */}
+                {/* Right Column: Question Statement & Interactive Inputs (8 cols) */}
                 {currentQuestion && (
                     <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
                         {/* Question Prompt Header */}
@@ -510,7 +578,6 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                                 </span>
                             </div>
 
-                            {/* Flag For Review Toggle */}
                             <button
                                 type="button"
                                 onClick={() => toggleFlagQuestion(currentQuestion._id.toString())}
@@ -524,6 +591,13 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                                 {flaggedQuestions.includes(currentQuestion._id.toString()) ? 'Flagged for Review' : 'Flag Question'}
                             </button>
                         </div>
+
+                        {/* Optional Diagram / Image */}
+                        {currentQuestion.imageUrl && (
+                            <div className="p-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                                <img src={currentQuestion.imageUrl} alt="Exam Question Graphic" className="max-h-64 rounded-xl object-contain mx-auto" />
+                            </div>
+                        )}
 
                         {/* Question Statement */}
                         <div className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-relaxed">
@@ -607,14 +681,31 @@ const AttemptQuiz = ({ quiz, onBack, onComplete }) => {
                                 </div>
                             )}
 
-                            {/* 4. Subjective Short Answer */}
-                            {currentQuestion.type === 'short_answer' && (
-                                <div>
+                            {/* 4. Fill in the Blank */}
+                            {currentQuestion.type === 'fill_blank' && (
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-bold text-slate-500">Your Answer (Type the missing word / phrase):</label>
+                                    <input
+                                        type="text"
+                                        value={answers.find(a => a.questionId === currentQuestion._id)?.textAnswer || ''}
+                                        onChange={(e) => handleTextAnswerChange(currentQuestion._id, e.target.value)}
+                                        placeholder="Type your response here..."
+                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none text-slate-900 dark:text-white font-medium"
+                                    />
+                                </div>
+                            )}
+
+                            {/* 5 & 6. Short / Long Subjective Answer */}
+                            {(currentQuestion.type === 'short_answer' || currentQuestion.type === 'long_answer') && (
+                                <div className="space-y-2">
+                                    <label className="block text-xs font-bold text-slate-500">
+                                        Your Written Response ({currentQuestion.type === 'long_answer' ? 'Extended Essay / Detailed Solution' : 'Short Answer'}):
+                                    </label>
                                     <textarea
                                         value={answers.find(a => a.questionId === currentQuestion._id)?.textAnswer || ''}
-                                        onChange={(e) => handleShortAnswerChange(currentQuestion._id, e.target.value)}
-                                        placeholder="Type your explanation, reasoning, or solution..."
-                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none min-h-[140px] resize-y text-slate-900 dark:text-white font-medium"
+                                        onChange={(e) => handleTextAnswerChange(currentQuestion._id, e.target.value)}
+                                        placeholder="Type your explanation, reasoning, or full solution..."
+                                        className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-pink-500/20 focus:border-pink-500 outline-none resize-y text-slate-900 dark:text-white font-medium ${currentQuestion.type === 'long_answer' ? 'min-h-[220px]' : 'min-h-[140px]'}`}
                                     />
                                 </div>
                             )}

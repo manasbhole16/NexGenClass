@@ -37,7 +37,11 @@ const roomSchema = new mongoose.Schema({
             name: { type: String, default: 'Assignments' },
             weight: { type: Number, default: 100 }
         }]
-    }
+    },
+    topics: [{
+        name: { type: String, required: true, trim: true },
+        order: { type: Number, default: 0 }
+    }]
 }, { timestamps: true });
 
 roomSchema.index({ owner: 1 });

@@ -38,12 +38,13 @@ module.exports.createRoom = async (req, res) => {
             banner: banner || 'purple',
             code,
             owner: req.user._id,
-            members: [req.user._id]
+            members: [req.user._id],
+            topics: [{ name: 'General', order: 0 }]
         });
 
         const populatedRoom = await Room.findById(newRoom._id)
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role');
+            .populate('members', 'fullname email role createdAt');
 
         res.status(201).json({ success: true, room: populatedRoom });
     } catch (err) {
@@ -100,7 +101,7 @@ module.exports.joinRoom = async (req, res) => {
 
         const populatedRoom = await Room.findById(room._id)
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role');
+            .populate('members', 'fullname email role createdAt');
 
         res.json({ success: true, room: populatedRoom });
     } catch (err) {
@@ -113,7 +114,7 @@ module.exports.getUserRooms = async (req, res) => {
     try {
         const rooms = await Room.find({ members: req.user._id })
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role')
+            .populate('members', 'fullname email role createdAt')
             .sort({ createdAt: -1 });
 
         // Add task counts / next upcoming deadline for rich cards
@@ -148,7 +149,7 @@ module.exports.getRoomById = async (req, res) => {
         const { roomId } = req.params;
         const room = await Room.findById(roomId)
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role');
+            .populate('members', 'fullname email role createdAt');
 
         if (!room) {
             return res.status(404).json({ message: "Classroom not found" });
@@ -191,7 +192,7 @@ module.exports.updateRoom = async (req, res) => {
 
         const updatedRoom = await Room.findById(roomId)
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role');
+            .populate('members', 'fullname email role createdAt');
 
         if (req.io) {
             req.io.to(roomId).emit("classroom_updated", updatedRoom);
@@ -282,7 +283,7 @@ module.exports.updateRoomSettings = async (req, res) => {
 
         const updatedRoom = await Room.findById(roomId)
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role');
+            .populate('members', 'fullname email role createdAt');
 
         if (req.io) {
             req.io.to(roomId).emit("classroom_settings_updated", updatedRoom);
@@ -528,6 +529,185 @@ module.exports.getDashboardSummary = async (req, res) => {
                 }
             });
         }
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// Create Topic in Classroom (Teacher only)
+module.exports.createTopic = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { name } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: "Topic name is required." });
+        }
+
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ message: "Classroom not found." });
+
+        const isOwner = room.owner.toString() === req.user._id.toString();
+        const isTeacher = isOwner || req.user.role === 'teacher';
+
+        if (!isTeacher) {
+            return res.status(403).json({ message: "Only instructors can create topics." });
+        }
+
+        if (!Array.isArray(room.topics)) {
+            room.topics = [];
+        }
+
+        const cleanName = name.trim();
+        const exists = room.topics.some(t => t.name.toLowerCase() === cleanName.toLowerCase());
+        if (exists) {
+            return res.status(400).json({ message: "A topic with this name already exists." });
+        }
+
+        const newTopic = { name: cleanName, order: room.topics.length };
+        room.topics.push(newTopic);
+        await room.save();
+
+        if (req.io) {
+            req.io.to(roomId).emit("classroom_updated", { _id: room._id, topics: room.topics });
+        }
+
+        res.status(201).json({ success: true, topic: newTopic, topics: room.topics });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// Rename Topic in Classroom (Teacher only)
+module.exports.renameTopic = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { oldName, newName } = req.body;
+
+        if (!oldName || !newName || !newName.trim()) {
+            return res.status(400).json({ message: "Both old and new topic names are required." });
+        }
+
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ message: "Classroom not found." });
+
+        const isOwner = room.owner.toString() === req.user._id.toString();
+        const isTeacher = isOwner || req.user.role === 'teacher';
+
+        if (!isTeacher) {
+            return res.status(403).json({ message: "Only instructors can rename topics." });
+        }
+
+        const cleanOldName = oldName.trim();
+        const cleanNewName = newName.trim();
+
+        if (!Array.isArray(room.topics)) {
+            room.topics = [];
+        }
+
+        const topicIndex = room.topics.findIndex(t => t.name.toLowerCase() === cleanOldName.toLowerCase());
+        if (topicIndex === -1) {
+            room.topics.push({ name: cleanNewName, order: room.topics.length });
+        } else {
+            room.topics[topicIndex].name = cleanNewName;
+        }
+
+        await room.save();
+
+        // Update all tasks under this topic
+        await Task.updateMany(
+            { room: roomId, topic: cleanOldName },
+            { $set: { topic: cleanNewName } }
+        );
+
+        if (req.io) {
+            req.io.to(roomId).emit("classroom_updated", { _id: room._id, topics: room.topics });
+            req.io.to(roomId).emit("topicRenamed", { roomId, oldName: cleanOldName, newName: cleanNewName });
+        }
+
+        res.json({ success: true, topics: room.topics, message: `Topic renamed to "${cleanNewName}".` });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// Delete Topic in Classroom (Teacher only)
+module.exports.deleteTopic = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { topicName } = req.body;
+
+        if (!topicName || !topicName.trim()) {
+            return res.status(400).json({ message: "Topic name is required." });
+        }
+
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ message: "Classroom not found." });
+
+        const isOwner = room.owner.toString() === req.user._id.toString();
+        const isTeacher = isOwner || req.user.role === 'teacher';
+
+        if (!isTeacher) {
+            return res.status(403).json({ message: "Only instructors can delete topics." });
+        }
+
+        const cleanName = topicName.trim();
+
+        if (Array.isArray(room.topics)) {
+            room.topics = room.topics.filter(t => t.name.toLowerCase() !== cleanName.toLowerCase());
+            await room.save();
+        }
+
+        // Move all tasks under this topic to 'General'
+        await Task.updateMany(
+            { room: roomId, topic: cleanName },
+            { $set: { topic: 'General' } }
+        );
+
+        if (req.io) {
+            req.io.to(roomId).emit("classroom_updated", { _id: room._id, topics: room.topics });
+            req.io.to(roomId).emit("topicDeleted", { roomId, topicName: cleanName });
+        }
+
+        res.json({ success: true, topics: room.topics, message: `Topic "${cleanName}" removed.` });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// Reorder Topics in Classroom (Teacher only)
+module.exports.reorderTopics = async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const { topics } = req.body; // Array of string topic names in order
+
+        if (!Array.isArray(topics)) {
+            return res.status(400).json({ message: "Topics array is required." });
+        }
+
+        const room = await Room.findById(roomId);
+        if (!room) return res.status(404).json({ message: "Classroom not found." });
+
+        const isOwner = room.owner.toString() === req.user._id.toString();
+        const isTeacher = isOwner || req.user.role === 'teacher';
+
+        if (!isTeacher) {
+            return res.status(403).json({ message: "Only instructors can reorder topics." });
+        }
+
+        const updatedTopics = topics.map((tName, index) => ({
+            name: String(tName).trim(),
+            order: index
+        }));
+
+        room.topics = updatedTopics;
+        await room.save();
+
+        if (req.io) {
+            req.io.to(roomId).emit("classroom_updated", { _id: room._id, topics: room.topics });
+        }
+
+        res.json({ success: true, topics: room.topics });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

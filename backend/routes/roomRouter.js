@@ -13,7 +13,11 @@ const {
     deleteRoom,
     kickMember,
     unenrollRoom,
-    getDashboardSummary
+    getDashboardSummary,
+    createTopic,
+    renameTopic,
+    deleteTopic,
+    reorderTopics
 } = require("../controllers/roomController");
 const { protect } = require("../middleware/authMiddleware");
 const announcementRouter = require("./announcementRouter");
@@ -32,6 +36,12 @@ router.delete("/delete/:roomId", deleteRoom);
 // Mount stream announcements router
 router.use("/:roomId/stream", announcementRouter);
 router.use("/:roomId/announcements", announcementRouter);
+
+// Topic management routes (Classwork 2.0)
+router.post("/:roomId/topics", createTopic);
+router.put("/:roomId/topics", renameTopic);
+router.delete("/:roomId/topics", deleteTopic);
+router.put("/:roomId/topics/reorder", reorderTopics);
 
 // Parameterized classroom routes
 router.get("/:roomId/settings", getRoomSettings);

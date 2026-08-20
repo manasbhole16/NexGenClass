@@ -252,8 +252,25 @@ module.exports.updateTask = async (req, res) => {
         }
 
         // If publishing a draft
-        if (task.isDraft && req.body.isDraft === false) {
+        const isPublishingDraft = task.isDraft && req.body.isDraft === false;
+        if (isPublishingDraft) {
             req.body.publishedAt = new Date();
+        }
+
+        // If topic is updated on a room task, ensure it exists in room.topics
+        if (task.room && req.body.topic && req.body.topic.trim()) {
+            const cleanTopic = req.body.topic.trim();
+            const roomObj = await Room.findById(task.room);
+            if (roomObj) {
+                if (!Array.isArray(roomObj.topics)) roomObj.topics = [];
+                if (!roomObj.topics.some(t => t.name.toLowerCase() === cleanTopic.toLowerCase())) {
+                    roomObj.topics.push({ name: cleanTopic, order: roomObj.topics.length });
+                    await roomObj.save();
+                    if (req.io) {
+                        req.io.to(task.room.toString()).emit("classroom_updated", { _id: roomObj._id, topics: roomObj.topics });
+                    }
+                }
+            }
         }
 
         const updatedTask = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -262,8 +279,44 @@ module.exports.updateTask = async (req, res) => {
             const roomTarget = updatedTask.room ? updatedTask.room.toString() : 'personal';
             if (updatedTask.room) {
                 req.io.to(roomTarget).emit("taskUpdated", updatedTask);
+                if (isPublishingDraft) {
+                    req.io.to(roomTarget).emit("taskCreated", updatedTask);
+                }
             } else {
                 req.io.emit("taskUpdated", updatedTask);
+                if (isPublishingDraft) {
+                    req.io.emit("taskCreated", updatedTask);
+                }
+            }
+        }
+
+        // If published draft in a room, notify students
+        if (isPublishingDraft && updatedTask.room) {
+            const room = await Room.findById(updatedTask.room);
+            if (room) {
+                let targetRecipients = [];
+                if (Array.isArray(updatedTask.assignedTo) && updatedTask.assignedTo.length > 0) {
+                    targetRecipients = updatedTask.assignedTo.map(id => id.toString());
+                } else {
+                    targetRecipients = (room.members || [])
+                        .filter(m => m.toString() !== req.user._id.toString())
+                        .map(m => m.toString());
+                }
+
+                if (targetRecipients.length > 0) {
+                    const notifs = targetRecipients.map(recipientId => ({
+                        recipient: recipientId,
+                        actor: req.user._id,
+                        type: "assignment_created",
+                        title: "New Assignment Published",
+                        message: `New assignment: "${updatedTask.title}" posted in "${room.name}".`,
+                        entityType: "task",
+                        entityId: updatedTask._id,
+                        roomId: room._id,
+                        metadata: { taskId: updatedTask._id, dueDate: updatedTask.dueDate }
+                    }));
+                    await notificationService.createManyNotifications(notifs, req.io);
+                }
             }
         }
 

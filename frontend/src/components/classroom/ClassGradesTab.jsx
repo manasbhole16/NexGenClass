@@ -3,7 +3,8 @@ import { Award, CheckCircle, Clock, AlertCircle, FileText, Search, ExternalLink,
 import API_BASE_URL from '../../apiConfig';
 
 const ClassGradesTab = ({ roomId, roomDetails, user, tasks = [], onOpenAssignment }) => {
-    const isTeacher = roomDetails?.owner === user?._id || user?.role === 'teacher';
+    const ownerId = roomDetails?.owner?._id || roomDetails?.owner;
+    const isTeacher = ownerId === user?._id || user?.role === 'teacher';
     const [submissionsMap, setSubmissionsMap] = useState({}); // { `${taskId}_${studentId}`: submission }
     const [quizzes, setQuizzes] = useState([]);
     const [quizAttemptsMap, setQuizAttemptsMap] = useState({}); // { `${quizId}_${studentId}`: attempt }
@@ -12,7 +13,7 @@ const ClassGradesTab = ({ roomId, roomDetails, user, tasks = [], onOpenAssignmen
     const [studentActiveFilter, setStudentActiveFilter] = useState('all');
 
     const assignments = tasks.filter(t => (t.taskType || 'assignment') === 'assignment');
-    const students = (roomDetails?.members || []).filter(m => m._id !== roomDetails?.owner);
+    const students = (roomDetails?.members || []).filter(m => (m._id || m) !== ownerId);
 
     useEffect(() => {
         if (!roomId || roomId === 'personal') return;

@@ -16,7 +16,9 @@ import {
     Eye, 
     Calendar,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    ShieldCheck,
+    FileText
 } from 'lucide-react';
 import Confetti from 'react-confetti';
 
@@ -42,7 +44,10 @@ const StudentResult = ({ quiz, user, onBack }) => {
                 if (data.attempt?.attemptNumber && !selectedAttemptNum) {
                     setSelectedAttemptNum(data.attempt.attemptNumber);
                 }
-                if (data.attempt?.isEvaluated && data.attempt?.percentage >= 60) {
+                const passing = (data.quiz?.passingMarks || 0);
+                const score = data.attempt?.score || 0;
+                const isPassed = passing > 0 ? score >= passing : (data.attempt?.percentage >= 60);
+                if (data.attempt?.isEvaluated && isPassed) {
                     setShowConfetti(true);
                     setTimeout(() => setShowConfetti(false), 5000);
                 }
@@ -64,10 +69,10 @@ const StudentResult = ({ quiz, user, onBack }) => {
 
     if (!resultData || !resultData.attempt) {
         return (
-            <div className="max-w-2xl mx-auto text-center p-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-4">
+            <div className="max-w-2xl mx-auto text-center p-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-4 animate-fadeIn">
                 <AlertCircle className="w-12 h-12 text-slate-400 mx-auto" />
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">No Assessment Record Found</h3>
-                <p className="text-xs text-slate-400">You haven't completed or submitted an attempt for this quiz yet.</p>
+                <p className="text-xs text-slate-400">You have not completed or submitted an attempt for this quiz yet.</p>
                 <button onClick={onBack} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all">
                     Back to Quizzes
                 </button>
@@ -78,6 +83,8 @@ const StudentResult = ({ quiz, user, onBack }) => {
     const { attempt, questions = [], allAttempts = [], isResultHidden } = resultData;
     const totalPossibleMarks = quiz.totalMarks || (questions.length > 0 ? questions.reduce((sum, q) => sum + q.marks, 0) : 100);
     const percentage = attempt.percentage !== undefined ? attempt.percentage : (totalPossibleMarks > 0 ? Math.round((attempt.score / totalPossibleMarks) * 100) : 0);
+    const passingMarks = quiz.passingMarks || resultData.quiz?.passingMarks || 0;
+    const isPassed = passingMarks > 0 ? attempt.score >= passingMarks : percentage >= 50;
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 pb-12 animate-fadeIn relative">
@@ -110,7 +117,7 @@ const StudentResult = ({ quiz, user, onBack }) => {
             </div>
 
             {/* ========================================================= */}
-            {/* HIDDEN RESULTS STATE (showResultsImmediately = false)    */}
+            {/* HIDDEN RESULTS STATE (When results are unreleased)        */}
             {/* ========================================================= */}
             {isResultHidden ? (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 sm:p-12 text-center space-y-5 shadow-lg">
@@ -125,18 +132,18 @@ const StudentResult = ({ quiz, user, onBack }) => {
                             Attempt Submitted Successfully
                         </h2>
                         <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                            {resultData.message || "Your exam has been submitted securely. Detailed results, scores, and answer reviews will be released by your instructor."}
+                            {resultData.message || "Your exam has been submitted securely. Detailed scores, answers, and teacher feedback will be available once released by your instructor."}
                         </p>
                     </div>
 
                     <div className="p-4 max-w-sm mx-auto bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 space-y-1">
-                        <p>Attempt Number: {attempt.attemptNumber}</p>
+                        <p>Attempt Number: #{attempt.attemptNumber}</p>
                         <p>Submitted At: {new Date(attempt.submittedAt).toLocaleString()}</p>
                     </div>
                 </div>
             ) : (
                 /* ========================================================= */
-                /* EVALUATED / AVAILABLE RESULTS DISPLAY                     */
+                /* EVALUATED / RELEASED RESULTS DISPLAY                      */
                 /* ========================================================= */
                 <div className="space-y-6">
                     {/* Main Score Hero Card */}
@@ -145,9 +152,16 @@ const StudentResult = ({ quiz, user, onBack }) => {
                             <span className="text-xs font-black uppercase px-3 py-1 rounded-xl bg-pink-500/10 text-pink-500 border border-pink-500/20">
                                 {quiz.topic || 'Academic Quiz'}
                             </span>
-                            <span className="text-xs font-bold text-slate-400">
-                                Attempt {attempt.attemptNumber} of {quiz.allowedAttempts || 1}
-                            </span>
+                            <div className="flex items-center gap-2">
+                                {attempt.isEvaluated && (
+                                    <span className={`text-xs font-black uppercase px-2.5 py-0.5 rounded-full ${isPassed ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'}`}>
+                                        {isPassed ? 'Passed' : 'Needs Improvement'}
+                                    </span>
+                                )}
+                                <span className="text-xs font-bold text-slate-400">
+                                    Attempt {attempt.attemptNumber} of {quiz.allowedAttempts || 1}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Status Icon & Message */}
@@ -179,7 +193,7 @@ const StudentResult = ({ quiz, user, onBack }) => {
                             </h2>
                             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md">
                                 {!attempt.isEvaluated 
-                                    ? 'Your objective responses have been auto-graded. Your teacher will evaluate subjective short answers shortly.' 
+                                    ? 'Your objective responses have been auto-graded. Your teacher will evaluate subjective short/long answers shortly.' 
                                     : `You have earned ${attempt.score} out of ${totalPossibleMarks} total marks.`}
                             </p>
                         </div>
@@ -227,7 +241,7 @@ const StudentResult = ({ quiz, user, onBack }) => {
                             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
                                 <div>
                                     <h3 className="text-base font-black text-slate-900 dark:text-white">Itemized Question Review</h3>
-                                    <p className="text-xs text-slate-400">Inspect your responses and correct answers.</p>
+                                    <p className="text-xs text-slate-400">Inspect your submitted answers and solution keys.</p>
                                 </div>
                                 <button
                                     onClick={() => setShowQuestionBreakdown(!showQuestionBreakdown)}
@@ -356,17 +370,31 @@ const StudentResult = ({ quiz, user, onBack }) => {
                                                     </div>
                                                 )}
 
-                                                {/* 4. Short Answer Review */}
-                                                {q.type === 'short_answer' && (
-                                                    <div className="space-y-3 text-xs">
+                                                {/* 4. Fill in the Blank Review */}
+                                                {q.type === 'fill_blank' && (
+                                                    <div className="space-y-2 text-xs">
                                                         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
                                                             <p className="font-bold text-slate-400 uppercase text-[10px]">Your Response:</p>
+                                                            <p className="text-slate-800 dark:text-slate-200 font-medium">{userAns?.textAnswer || 'No response entered.'}</p>
+                                                        </div>
+                                                        <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-1">
+                                                            <p className="font-bold text-emerald-500 uppercase text-[10px]">Correct Answer:</p>
+                                                            <p className="text-slate-700 dark:text-slate-300 font-medium">{String(q.correctAnswer || '')}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* 5 & 6. Short / Long Subjective Review */}
+                                                {(q.type === 'short_answer' || q.type === 'long_answer') && (
+                                                    <div className="space-y-3 text-xs">
+                                                        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1">
+                                                            <p className="font-bold text-slate-400 uppercase text-[10px]">Your Written Response:</p>
                                                             <p className="text-slate-800 dark:text-slate-200 font-medium whitespace-pre-wrap">{userAns?.textAnswer || 'No response entered.'}</p>
                                                         </div>
 
                                                         {q.referenceAnswer && (
                                                             <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl space-y-1">
-                                                                <p className="font-bold text-emerald-500 uppercase text-[10px]">Reference Solution / Rubric:</p>
+                                                                <p className="font-bold text-emerald-500 uppercase text-[10px]">Model Solution / Criteria:</p>
                                                                 <p className="text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap">{q.referenceAnswer}</p>
                                                             </div>
                                                         )}
@@ -377,6 +405,14 @@ const StudentResult = ({ quiz, user, onBack }) => {
                                                                 <p className="text-slate-700 dark:text-slate-300 font-medium">{userAns.feedback}</p>
                                                             </div>
                                                         )}
+                                                    </div>
+                                                )}
+
+                                                {/* Explanation */}
+                                                {q.explanation && (
+                                                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 space-y-0.5">
+                                                        <p className="font-bold uppercase text-[10px]">Solution Explanation:</p>
+                                                        <p>{q.explanation}</p>
                                                     </div>
                                                 )}
                                             </div>

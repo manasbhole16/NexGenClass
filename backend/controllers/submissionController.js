@@ -171,6 +171,25 @@ module.exports.uploadFile = async (req, res) => {
             req.io.to(task.room.toString()).emit("submissionUpdate", submission);
         }
 
+        // Notify room owner / teacher
+        if (task.room) {
+            const room = await Room.findById(task.room);
+            if (room && room.owner && room.owner.toString() !== studentId.toString()) {
+                await notificationService.createNotification({
+                    recipient: room.owner,
+                    actor: studentId,
+                    type: "assignment_submitted",
+                    title: "Assignment Submitted",
+                    message: `${req.user.fullname} submitted "${task.title}".`,
+                    entityType: "submission",
+                    entityId: submission._id,
+                    roomId: room._id,
+                    metadata: { taskId: task._id, submissionId: submission._id },
+                    io: req.io
+                });
+            }
+        }
+
         res.json({ success: true, submission });
     } catch (err) {
         console.error("Upload error:", err);

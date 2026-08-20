@@ -56,6 +56,11 @@ const notificationSchema = new mongoose.Schema(
                 "announcement_created",
                 "announcement_comment",
                 "announcement_reply",
+                // Attendance & Calendar
+                "attendance_marked",
+                "attendance_warning",
+                "attendance_session",
+                "calendar_event",
                 // System
                 "general",
                 "system"
@@ -74,7 +79,7 @@ const notificationSchema = new mongoose.Schema(
         },
         entityType: {
             type: String,
-            enum: ["task", "submission", "quiz", "attempt", "form", "announcement", "room", "system"],
+            enum: ["task", "submission", "quiz", "attempt", "form", "attendance", "announcement", "room", "calendar", "system"],
             default: "system"
         },
         entityId: {
