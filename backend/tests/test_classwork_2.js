@@ -7,7 +7,8 @@ const Attendance = require('../models/attendance-model');
 const Announcement = require('../models/announcement-model');
 const crypto = require('crypto');
 const http = require('http');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const API_HOST = '127.0.0.1';
 const API_PORT = 3000;

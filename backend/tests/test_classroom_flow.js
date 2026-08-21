@@ -6,7 +6,8 @@ const Announcement = require('../models/announcement-model');
 const Task = require('../models/task-model');
 const Submission = require('../models/submission-model');
 const Attendance = require('../models/attendance-model');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://manas:manas2005@nexgenclass.jndf9.mongodb.net/?retryWrites=true&w=majority&appName=NexGenClass';
 
