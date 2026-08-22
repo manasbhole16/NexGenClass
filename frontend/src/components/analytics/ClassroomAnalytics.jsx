@@ -1,263 +1,538 @@
 import React, { useState, useEffect } from 'react';
-import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import { Calendar, CheckCircle, Clock, GraduationCap, FileText, Activity } from 'lucide-react';
+import { 
+    Users, 
+    Calendar, 
+    CheckCircle2, 
+    AlertTriangle, 
+    BookOpen, 
+    FileText, 
+    Brain, 
+    TrendingUp, 
+    Download, 
+    Filter, 
+    Clock, 
+    Award, 
+    Search, 
+    ChevronRight, 
+    AlertCircle, 
+    BarChart3, 
+    Layers, 
+    RefreshCw,
+    X,
+    Printer
+} from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
+import { io } from 'socket.io-client';
 
 const ClassroomAnalytics = ({ roomId }) => {
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({
-        subjectAttendance: 0,
-        submissionRate: 0,
-        averageQuizScore: 0,
-        upcomingTasks: [],
-        recentActivity: [],
-        historyData: []
-    });
+    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'roster', 'attention', 'assignments', 'quizzes', 'attendance'
+    const [analytics, setAnalytics] = useState(null);
+    const [selectedTopic, setSelectedTopic] = useState('all');
+    const [searchRoster, setSearchRoster] = useState('');
+    const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
 
-    useEffect(() => {
-        const fetchClassroomAnalytics = async () => {
-            try {
-                const safeFetch = async (url) => {
-                    try {
-                        const res = await fetch(url, { credentials: 'include' });
-                        if (!res.ok) return { success: false };
-                        return await res.json();
-                    } catch (e) {
-                        return { success: false };
-                    }
-                };
+    // Fetch Classroom Analytics from API
+    const fetchAnalytics = async () => {
+        try {
+            setLoading(true);
+            const params = new URLSearchParams();
+            if (selectedTopic && selectedTopic !== 'all') params.append('topic', selectedTopic);
 
-                const [attRes, subRes, taskRes, attemptRes] = await Promise.all([
-                    safeFetch(`${API_BASE_URL}/api/attendance/student`),
-                    safeFetch(`${API_BASE_URL}/api/submissions/me?roomId=${roomId}`),
-                    safeFetch(`${API_BASE_URL}/api/tasks?roomId=${roomId}`),
-                    safeFetch(`${API_BASE_URL}/api/quiz/attempts/me?roomId=${roomId}`)
-                ]);
-
-                // Attendance
-                let subjectAttendance = 0;
-                if (attRes.success && attRes.subjects) {
-                    const subj = attRes.subjects.find(s => s.room?._id === roomId || s.room === roomId);
-                    if (subj) subjectAttendance = subj.percentage;
-                }
-
-                // Submissions & Tasks
-                const submissions = subRes.success ? subRes.submissions : [];
-                const tasks = taskRes.success ? taskRes.tasks : [];
-                const assignmentTasks = tasks.filter(t => t.taskType === 'assignment' || t.taskType === 'Experiment' || t.taskType === 'Lab');
-                const submissionRate = assignmentTasks.length > 0
-                    ? Math.round((submissions.length / assignmentTasks.length) * 100)
-                    : 100;
-
-                // Upcoming Tasks
-                const now = new Date();
-                const upcomingTasks = tasks.filter(t => t.dueDate && new Date(t.dueDate) > now).slice(0, 3); // top 3
-
-                // Quizzes & Average Score
-                const attempts = attemptRes.success ? attemptRes.attempts : [];
-                let totalQuizScore = 0;
-                let maxQuizPossible = 0;
-                attempts.forEach(a => {
-                    totalQuizScore += a.score;
-                    maxQuizPossible += (a.quizId?.totalMarks || 100);
-                });
-                const averageQuizScore = maxQuizPossible > 0 ? Math.round((totalQuizScore / maxQuizPossible) * 100) : 0;
-
-                // History for Line Chart (Quiz Performance)
-                const historyData = attempts.map(a => ({
-                    date: new Date(a.createdAt),
-                    score: (a.score / (a.quizId?.totalMarks || 100)) * 100,
-                    title: a.quizId?.title || 'Quiz'
-                })).sort((a, b) => a.date - b.date);
-
-                // Recent Activity Timeline
-                // Combine submissions and attempts
-                const recentActivity = [
-                    ...submissions.map(s => ({
-                        id: s._id,
-                        type: 'submission',
-                        title: `Submitted: ${s.taskId?.title || 'Assignment'}`,
-                        date: new Date(s.submittedAt || s.createdAt),
-                        status: s.status
-                    })),
-                    ...attempts.map(a => ({
-                        id: a._id,
-                        type: 'quiz',
-                        title: `Attempted: ${a.quizId?.title || 'Quiz'}`,
-                        date: new Date(a.createdAt),
-                        score: a.score
-                    }))
-                ].sort((a, b) => b.date - a.date).slice(0, 5); // Latest 5 activities
-
-                setStats({
-                    subjectAttendance,
-                    submissionRate,
-                    averageQuizScore,
-                    upcomingTasks,
-                    recentActivity,
-                    historyData
-                });
-
-            } catch (err) {
-                console.error("Error fetching classroom analytics", err);
-            } finally {
-                setLoading(false);
+            const res = await fetch(`${API_BASE_URL}/api/analytics/class/${roomId}?${params.toString()}`, { credentials: 'include' });
+            const json = await res.json();
+            if (json.success) {
+                setAnalytics(json);
             }
-        };
-
-        if (roomId) fetchClassroomAnalytics();
-    }, [roomId]);
-
-    if (loading) {
-        return <div className="p-8 text-center text-gray-500">Loading Classroom Analytics...</div>;
-    }
-
-    // Chart Configuration
-    const performanceLineData = {
-        labels: stats.historyData.map(h => h.date.toLocaleDateString()),
-        datasets: [
-            {
-                label: 'Quiz/Test Score (%)',
-                data: stats.historyData.map(h => h.score),
-                borderColor: '#10b981', // emerald-500
-                backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                tension: 0.4,
-                fill: true,
-                pointBackgroundColor: '#06b6d4',
-            }
-        ]
-    };
-
-    const commonOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { labels: { color: '#9ca3af' } }
-        },
-        scales: {
-            y: { 
-                grid: { color: 'rgba(255,255,255,0.05)' }, 
-                ticks: { color: '#9ca3af' },
-                min: 0,
-                max: 100
-            },
-            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } }
+        } catch (err) {
+            console.error("Failed to load classroom analytics:", err);
+        } finally {
+            setLoading(false);
         }
     };
 
+    useEffect(() => {
+        if (roomId && roomId !== 'personal') {
+            fetchAnalytics();
+        }
+    }, [roomId, selectedTopic]);
+
+    // Socket.IO Real-Time Sync
+    useEffect(() => {
+        if (!roomId || roomId === 'personal') return;
+        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
+        socket.emit('joinRoom', { roomId });
+
+        const handleUpdate = () => {
+            fetchAnalytics();
+        };
+
+        socket.on('taskCreated', handleUpdate);
+        socket.on('taskUpdated', handleUpdate);
+        socket.on('submissionCreated', handleUpdate);
+        socket.on('attendance_updated', handleUpdate);
+        socket.on('quizCreated', handleUpdate);
+
+        return () => {
+            socket.disconnect();
+        };
+    }, [roomId]);
+
+    const handleExportCSV = () => {
+        window.open(`${API_BASE_URL}/api/analytics/class/${roomId}/export`, '_blank');
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+                <RefreshCw className="w-8 h-8 text-purple-600 animate-spin" />
+                <p className="text-xs font-bold text-slate-400">Computing classroom intelligence & metrics...</p>
+            </div>
+        );
+    }
+
+    if (!analytics) {
+        return (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center space-y-3">
+                <AlertCircle className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Classroom Analytics Unavailable</h3>
+                <p className="text-xs text-slate-400">Could not retrieve academic metrics for this classroom.</p>
+            </div>
+        );
+    }
+
+    const { summary, classroom, attendance, assignments, quizzes, gradeDistribution, studentRoster, needsAttentionRoster } = analytics;
+
+    // Filter Roster
+    const filteredRoster = (studentRoster || []).filter(s => 
+        s.fullname.toLowerCase().includes(searchRoster.toLowerCase()) ||
+        s.email.toLowerCase().includes(searchRoster.toLowerCase())
+    );
+
     return (
-        <div className="space-y-6 animate-fade-in py-4">
-            {/* Top Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-4 flex items-center shadow-sm">
-                    <div className="p-3 bg-blue-500/10 rounded-lg mr-4">
-                        <Calendar className="w-6 h-6 text-blue-500" />
-                    </div>
+        <div className="space-y-6 animate-fadeIn">
+            {/* Top Classroom Header & Quick Export */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Subject Attendance</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.subjectAttendance}%</p>
+                        <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                                {classroom.code}
+                            </span>
+                            <span className="text-xs text-slate-400 font-bold">{classroom.subject || 'Academic Classroom'}</span>
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">{classroom.name} Analytics</h2>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => window.print()}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-2xl text-xs font-bold transition-all"
+                            title="Print Report"
+                        >
+                            <Printer className="w-4 h-4" /> Print
+                        </button>
+                        <button
+                            onClick={handleExportCSV}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold shadow-lg shadow-purple-600/20 transition-all active:scale-95"
+                        >
+                            <Download className="w-4 h-4" /> Export CSV
+                        </button>
                     </div>
                 </div>
-                <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-4 flex items-center shadow-sm">
-                    <div className="p-3 bg-emerald-500/10 rounded-lg mr-4">
-                        <CheckCircle className="w-6 h-6 text-emerald-500" />
+
+                {/* 6 Top KPI Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+                    {/* KPI 1: Enrolled Students */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-slate-400">
+                            <span className="text-[10px] font-black uppercase">Students</span>
+                            <Users className="w-4 h-4 text-purple-500" />
+                        </div>
+                        <p className="text-xl font-black text-slate-900 dark:text-white">{summary.totalStudents}</p>
+                        <p className="text-[10px] text-slate-400 font-bold">Enrolled in class</p>
                     </div>
-                    <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Submission Rate</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.submissionRate}%</p>
+
+                    {/* KPI 2: Class Average Grade */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-slate-400">
+                            <span className="text-[10px] font-black uppercase">Class Avg</span>
+                            <Award className="w-4 h-4 text-emerald-500" />
+                        </div>
+                        <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{summary.classAverageGrade}%</p>
+                        <p className="text-[10px] text-slate-400 font-bold">Overall composite</p>
+                    </div>
+
+                    {/* KPI 3: Submission Rate */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-slate-400">
+                            <span className="text-[10px] font-black uppercase">Submission</span>
+                            <CheckCircle2 className="w-4 h-4 text-indigo-500" />
+                        </div>
+                        <p className="text-xl font-black text-indigo-600 dark:text-indigo-400">{summary.assignmentSubmissionRate}%</p>
+                        <p className="text-[10px] text-slate-400 font-bold">{summary.totalAssignments} total tasks</p>
+                    </div>
+
+                    {/* KPI 4: Quiz Average */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-slate-400">
+                            <span className="text-[10px] font-black uppercase">Quiz Avg</span>
+                            <Brain className="w-4 h-4 text-pink-500" />
+                        </div>
+                        <p className="text-xl font-black text-pink-600 dark:text-pink-400">{summary.averageQuizScore}%</p>
+                        <p className="text-[10px] text-slate-400 font-bold">{summary.totalQuizzes} assessments</p>
+                    </div>
+
+                    {/* KPI 5: Class Attendance */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-slate-400">
+                            <span className="text-[10px] font-black uppercase">Attendance</span>
+                            <Calendar className="w-4 h-4 text-cyan-500" />
+                        </div>
+                        <p className={`text-xl font-black ${summary.classAttendancePercentage < 75 ? 'text-rose-500' : 'text-cyan-600 dark:text-cyan-400'}`}>
+                            {summary.classAttendancePercentage}%
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold">{summary.totalSessions} sessions</p>
+                    </div>
+
+                    {/* KPI 6: At-Risk / Needs Attention */}
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-slate-400">
+                            <span className="text-[10px] font-black uppercase">Attention</span>
+                            <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <p className={`text-xl font-black ${summary.needsAttentionCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-500'}`}>
+                            {summary.needsAttentionCount}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold">Students at risk</p>
                     </div>
                 </div>
-                <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-4 flex items-center shadow-sm">
-                    <div className="p-3 bg-purple-500/10 rounded-lg mr-4">
-                        <GraduationCap className="w-6 h-6 text-purple-500" />
-                    </div>
-                    <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Avg. Quiz Score</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.averageQuizScore}%</p>
-                    </div>
+
+                {/* Sub-Navigation Tabs */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                    {[
+                        { id: 'overview', label: 'Overview & Distribution' },
+                        { id: 'roster', label: `Student Roster (${studentRoster?.length || 0})` },
+                        { id: 'attention', label: `Needs Attention (${needsAttentionRoster?.length || 0})` },
+                        { id: 'assignments', label: 'Assignment Item Stats' },
+                        { id: 'quizzes', label: 'Quiz Item Stats' },
+                        { id: 'attendance', label: 'Attendance Timeline' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                                activeTab === tab.id
+                                    ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Line Chart: Performance */}
-                <div className="lg:col-span-2 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Quiz/Test Performance</h3>
-                    <div className="h-64">
-                        {stats.historyData.length > 0 ? (
-                            <Line data={performanceLineData} options={commonOptions} />
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-gray-500 text-sm">Not enough quiz data to map trends</div>
-                        )}
-                    </div>
-                </div>
+            {/* ======================================================== */}
+            {/* TAB 1: OVERVIEW & GRADE DISTRIBUTION                     */}
+            {/* ======================================================== */}
+            {activeTab === 'overview' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Grade Distribution Buckets */}
+                    <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                            <div>
+                                <h3 className="text-base font-black text-slate-900 dark:text-white">Classroom Grade Distribution</h3>
+                                <p className="text-xs text-slate-400">Distribution of overall student composite scores.</p>
+                            </div>
+                            <BarChart3 className="w-5 h-5 text-purple-600" />
+                        </div>
 
-                <div className="space-y-6">
-                    {/* Upcoming Tasks */}
-                    <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-orange-500" /> Upcoming Tasks
-                        </h3>
                         <div className="space-y-3">
-                            {stats.upcomingTasks.length > 0 ? (
-                                stats.upcomingTasks.map(t => (
-                                    <div key={t._id} className="p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/5">
-                                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate">{t.title}</p>
-                                        <p className="text-xs text-orange-500 mt-1">Due: {new Date(t.dueDate).toLocaleDateString()}</p>
+                            {Object.entries(gradeDistribution || {}).map(([range, count]) => {
+                                const total = summary.totalStudents || 1;
+                                const percent = Math.round((count / total) * 100);
+
+                                return (
+                                    <div key={range} className="space-y-1">
+                                        <div className="flex items-center justify-between text-xs font-bold">
+                                            <span className="text-slate-700 dark:text-slate-300">{range}%</span>
+                                            <span className="text-slate-400">{count} student(s) ({percent}%)</span>
+                                        </div>
+                                        <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full transition-all duration-500"
+                                                style={{ width: `${percent}%` }}
+                                            />
+                                        </div>
                                     </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-gray-500">No upcoming tasks.</p>
-                            )}
+                                );
+                            })}
                         </div>
                     </div>
 
-                    {/* Recent Activity */}
-                    <div className="bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                            <Activity className="w-5 h-5 text-cyan-500" /> Recent Activity
-                        </h3>
-                        <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-300 dark:before:via-white/10 before:to-transparent">
-                            {stats.recentActivity.length > 0 ? (
-                                stats.recentActivity.map((act, i) => (
-                                    <div key={i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                                        <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-[#18181b] bg-gray-100 dark:bg-gray-800 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow">
-                                            {act.type === 'submission' ? <FileText className="w-4 h-4 text-blue-500" /> : <GraduationCap className="w-4 h-4 text-purple-500" />}
-                                        </div>
-                                        <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1f1f23] shadow-sm">
-                                            <p className="font-medium text-sm text-gray-900 dark:text-white">{act.title}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{act.date.toLocaleDateString()}</p>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-gray-500 pl-8">No recent activity found.</p>
-                            )}
+                    {/* Attendance Quick Breakdown */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                        <h3 className="text-base font-black text-slate-900 dark:text-white">Attendance Summary</h3>
+                        <div className="space-y-3">
+                            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+                                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Total Present Marks</span>
+                                <span className="text-base font-black text-emerald-600">{attendance.presentCount}</span>
+                            </div>
+                            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
+                                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">Total Late Marks</span>
+                                <span className="text-base font-black text-amber-600">{attendance.lateCount}</span>
+                            </div>
+                            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between">
+                                <span className="text-xs font-bold text-rose-600 dark:text-rose-400">Total Absent Marks</span>
+                                <span className="text-base font-black text-rose-600">{attendance.absentCount}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB 2: COMPLETE STUDENT PERFORMANCE ROSTER               */}
+            {/* ======================================================== */}
+            {activeTab === 'roster' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div>
+                            <h3 className="text-base font-black text-slate-900 dark:text-white">Enrolled Student Roster</h3>
+                            <p className="text-xs text-slate-400">Individual academic performance metrics across all assignments and sessions.</p>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 min-w-[220px]">
+                            <Search className="w-3.5 h-3.5 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search by student name..."
+                                value={searchRoster}
+                                onChange={(e) => setSearchRoster(e.target.value)}
+                                className="bg-transparent text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none font-medium w-full"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400">
+                                    <th className="py-3 px-3">Student Name</th>
+                                    <th className="py-3 px-3">Attendance</th>
+                                    <th className="py-3 px-3">Assignment %</th>
+                                    <th className="py-3 px-3">Avg Assignment</th>
+                                    <th className="py-3 px-3">Avg Quiz</th>
+                                    <th className="py-3 px-3">Missing</th>
+                                    <th className="py-3 px-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                                {filteredRoster.map(s => (
+                                    <tr 
+                                        key={s.studentId}
+                                        onClick={() => setSelectedStudentDetail(s)}
+                                        className="hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
+                                    >
+                                        <td className="py-3 px-3">
+                                            <p className="font-bold text-slate-900 dark:text-white">{s.fullname}</p>
+                                            <p className="text-[10px] text-slate-400">{s.email}</p>
+                                        </td>
+                                        <td className="py-3 px-3">
+                                            <span className={`font-bold ${s.attendancePercentage < 75 ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+                                                {s.attendancePercentage}%
+                                            </span>
+                                        </td>
+                                        <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">{s.assignmentCompletionRate}%</td>
+                                        <td className="py-3 px-3 font-bold text-emerald-600 dark:text-emerald-400">{s.averageAssignmentGrade}%</td>
+                                        <td className="py-3 px-3 font-bold text-pink-600 dark:text-pink-400">{s.averageQuizScore}%</td>
+                                        <td className="py-3 px-3">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black ${s.missingAssignmentsCount > 0 ? 'bg-rose-500/10 text-rose-600' : 'text-slate-400'}`}>
+                                                {s.missingAssignmentsCount}
+                                            </span>
+                                        </td>
+                                        <td className="py-3 px-3">
+                                            <span className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase ${
+                                                s.status === 'Needs Attention'
+                                                    ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                                                    : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                                            }`}>
+                                                {s.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB 3: NEEDS ATTENTION / AT-RISK STUDENTS                */}
+            {/* ======================================================== */}
+            {activeTab === 'attention' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                    <div>
+                        <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-amber-500" /> Students Requiring Attention ({needsAttentionRoster?.length || 0})
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">
+                            Flagged automatically based on transparent observable criteria (Attendance &lt; 75%, missing assignments, or low grades).
+                        </p>
+                    </div>
+
+                    {needsAttentionRoster.length === 0 ? (
+                        <div className="text-center py-12 text-slate-400 text-xs font-bold space-y-2">
+                            <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                            <p>Great news! All enrolled students are currently meeting academic health criteria.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {needsAttentionRoster.map(s => (
+                                <div key={s.studentId} className="p-4 bg-slate-50 dark:bg-slate-950 border border-amber-500/30 rounded-2xl space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-black text-sm text-slate-900 dark:text-white">{s.fullname}</h4>
+                                            <p className="text-[10px] text-slate-400">{s.email}</p>
+                                        </div>
+                                        <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                                            Needs Attention
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black uppercase text-slate-400">Trigger Reasons:</p>
+                                        {s.attentionReasons.map((r, idx) => (
+                                            <p key={idx} className="text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1.5">
+                                                &bull; {r}
+                                            </p>
+                                        ))}
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 text-[10px] text-slate-400">
+                                        <div>Att: <strong className="text-slate-900 dark:text-white">{s.attendancePercentage}%</strong></div>
+                                        <div>Assign: <strong className="text-slate-900 dark:text-white">{s.assignmentCompletionRate}%</strong></div>
+                                        <div>Quiz: <strong className="text-slate-900 dark:text-white">{s.averageQuizScore}%</strong></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB 4: ASSIGNMENT ITEM STATS                             */}
+            {/* ======================================================== */}
+            {activeTab === 'assignments' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">Assignment-Level Performance & Turnout</h3>
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400">
+                                    <th className="py-3 px-3">Title</th>
+                                    <th className="py-3 px-3">Topic</th>
+                                    <th className="py-3 px-3">Turned In</th>
+                                    <th className="py-3 px-3">Missing</th>
+                                    <th className="py-3 px-3">Late</th>
+                                    <th className="py-3 px-3">Graded</th>
+                                    <th className="py-3 px-3">Avg Score</th>
+                                    <th className="py-3 px-3">Completion Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                                {(assignments.itemStats || []).map(item => (
+                                    <tr key={item.taskId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                        <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">{item.title}</td>
+                                        <td className="py-3 px-3 text-slate-400">{item.topic || 'General'}</td>
+                                        <td className="py-3 px-3 font-bold text-emerald-600">{item.submittedCount}</td>
+                                        <td className="py-3 px-3 text-rose-500 font-bold">{item.missingCount}</td>
+                                        <td className="py-3 px-3 text-amber-500 font-bold">{item.lateCount}</td>
+                                        <td className="py-3 px-3 text-purple-600 font-bold">{item.gradedCount}</td>
+                                        <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">{item.averageScore} / {item.maxMarks} ({item.averagePercentage}%)</td>
+                                        <td className="py-3 px-3 font-bold text-indigo-600">{item.submissionRate}%</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB 5: QUIZ ITEM STATS                                   */}
+            {/* ======================================================== */}
+            {activeTab === 'quizzes' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">Quiz & Assessment Performance</h3>
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400">
+                                    <th className="py-3 px-3">Quiz Title</th>
+                                    <th className="py-3 px-3">Topic</th>
+                                    <th className="py-3 px-3">Total Marks</th>
+                                    <th className="py-3 px-3">Attempts Count</th>
+                                    <th className="py-3 px-3">Average %</th>
+                                    <th className="py-3 px-3">Pass Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                                {(quizzes.itemStats || []).map(item => (
+                                    <tr key={item.quizId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                        <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">{item.title}</td>
+                                        <td className="py-3 px-3 text-slate-400">{item.topic || 'General'}</td>
+                                        <td className="py-3 px-3 font-bold text-slate-700 dark:text-slate-300">{item.totalMarks}</td>
+                                        <td className="py-3 px-3 font-bold text-indigo-600">{item.attemptsCount}</td>
+                                        <td className="py-3 px-3 font-bold text-pink-600">{item.averagePercentage}%</td>
+                                        <td className="py-3 px-3 font-bold text-emerald-600">{item.passRate}%</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB 6: ATTENDANCE TIMELINE                               */}
+            {/* ======================================================== */}
+            {activeTab === 'attendance' && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">Attendance Session Breakdown</h3>
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400">
+                                    <th className="py-3 px-3">Date</th>
+                                    <th className="py-3 px-3">Session Title</th>
+                                    <th className="py-3 px-3">Type</th>
+                                    <th className="py-3 px-3">Present</th>
+                                    <th className="py-3 px-3">Late</th>
+                                    <th className="py-3 px-3">Absent</th>
+                                    <th className="py-3 px-3">Turnout %</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                                {(attendance.sessionTrend || []).map(sess => (
+                                    <tr key={sess.sessionId} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                        <td className="py-3 px-3 font-bold text-slate-900 dark:text-white">{sess.date}</td>
+                                        <td className="py-3 px-3 text-slate-700 dark:text-slate-300">{sess.title}</td>
+                                        <td className="py-3 px-3 font-black uppercase text-[10px] text-purple-600">{sess.sessionType}</td>
+                                        <td className="py-3 px-3 text-emerald-600 font-bold">{sess.present}</td>
+                                        <td className="py-3 px-3 text-amber-500 font-bold">{sess.late}</td>
+                                        <td className="py-3 px-3 text-rose-500 font-bold">{sess.absent}</td>
+                                        <td className="py-3 px-3 font-bold text-indigo-600">{sess.turnoutPercentage}%</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

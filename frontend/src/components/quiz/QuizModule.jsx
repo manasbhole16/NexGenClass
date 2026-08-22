@@ -17,7 +17,10 @@ import {
     Award, 
     Search,
     Filter,
-    BarChart3
+    BarChart3,
+    ShieldAlert,
+    Calendar,
+    RotateCcw
 } from 'lucide-react';
 import CreateQuiz from './CreateQuiz';
 import AddQuestions from './AddQuestions';
@@ -95,10 +98,10 @@ const QuizModule = ({ roomId, user }) => {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                             <h2 className="text-2xl font-black flex items-center gap-2.5 text-slate-900 dark:text-white">
-                                <Brain className="text-pink-500 w-7 h-7" /> Class Quizzes & Tests
+                                <Brain className="text-pink-500 w-7 h-7" /> Class Assessments & Quizzes
                             </h2>
                             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                Test your knowledge, master topic concepts, and track your performance.
+                                Evaluate conceptual understanding, run timed examinations, and track student outcomes.
                             </p>
                         </div>
                         {isTeacher && (
@@ -117,7 +120,7 @@ const QuizModule = ({ roomId, user }) => {
                             <Search className="w-4 h-4 text-slate-400 ml-1" />
                             <input
                                 type="text"
-                                placeholder="Search quizzes by title or keyword..."
+                                placeholder="Search assessments by title or topic..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder-slate-400 outline-none font-medium"
@@ -142,7 +145,7 @@ const QuizModule = ({ roomId, user }) => {
                     {filteredQuizzes.length === 0 ? (
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center text-slate-500 dark:text-slate-400 shadow-sm">
                             <Brain className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-                            <p className="font-bold text-base text-slate-800 dark:text-slate-200">No quizzes match your filter</p>
+                            <p className="font-bold text-base text-slate-800 dark:text-slate-200">No assessments match your filter</p>
                             <p className="text-xs text-slate-400 mt-1">Create a new quiz or adjust your search keywords.</p>
                         </div>
                     ) : (
@@ -150,37 +153,49 @@ const QuizModule = ({ roomId, user }) => {
                             {filteredQuizzes.map(quiz => (
                                 <div 
                                     key={quiz._id} 
-                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 hover:border-pink-500/40 hover:shadow-xl transition-all group flex flex-col justify-between shadow-sm relative overflow-hidden"
+                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 hover:border-pink-500/40 hover:shadow-xl transition-all group flex flex-col justify-between shadow-sm relative overflow-hidden space-y-4"
                                 >
                                     <div>
-                                        {/* Top Card Row */}
-                                        <div className="flex items-start justify-between gap-2 mb-3">
-                                            <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                                        {/* Top Card Badges */}
+                                        <div className="flex flex-wrap items-center justify-between gap-1.5 mb-3">
+                                            <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
                                                 {quiz.topic || 'General'}
                                             </span>
                                             
-                                            {isTeacher ? (
-                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${quiz.isPublished ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}`}>
-                                                    {quiz.isPublished ? 'Published' : 'Draft'}
-                                                </span>
-                                            ) : (
-                                                quiz.hasAttempted ? (
-                                                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1">
-                                                        <CheckCircle2 className="w-3 h-3" /> Attempted
+                                            <div className="flex items-center gap-1.5">
+                                                {quiz.safeMode && (
+                                                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-0.5" title="Integrity Mode Active">
+                                                        <ShieldAlert className="w-3 h-3" /> Safe
+                                                    </span>
+                                                )}
+
+                                                {isTeacher ? (
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${quiz.isPublished ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}`}>
+                                                        {quiz.isPublished ? 'Published' : 'Draft'}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20">
-                                                        Available
-                                                    </span>
-                                                )
-                                            )}
+                                                    quiz.hasAttempted ? (
+                                                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1">
+                                                            <CheckCircle2 className="w-3 h-3" /> Attempted
+                                                        </span>
+                                                    ) : quiz.isInProgress ? (
+                                                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1">
+                                                            <RotateCcw className="w-3 h-3 animate-spin" /> In Progress
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-pink-500/10 text-pink-500 border border-pink-500/20">
+                                                            Available
+                                                        </span>
+                                                    )
+                                                )}
+                                            </div>
                                         </div>
 
                                         <h3 className="font-black text-base text-slate-900 dark:text-white group-hover:text-pink-500 transition-colors line-clamp-1 mb-1.5">
                                             {quiz.title}
                                         </h3>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-4 leading-relaxed">
-                                            {quiz.description || 'No description provided.'}
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                            {quiz.description || 'No instructions provided.'}
                                         </p>
                                     </div>
 
@@ -189,17 +204,22 @@ const QuizModule = ({ roomId, user }) => {
                                         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-medium py-3 border-t border-slate-100 dark:border-slate-800/80 mb-4">
                                             <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-500" /> {quiz.timeLimit}m</div>
                                             <div className="flex items-center gap-1"><Award className="w-3.5 h-3.5 text-emerald-500" /> {quiz.totalMarks} Pts</div>
+                                            {quiz.passingMarks > 0 && (
+                                                <div className="flex items-center gap-1 text-indigo-500" title={`Passing score: ${quiz.passingMarks} pts`}>
+                                                    <span>Pass: {quiz.passingMarks}</span>
+                                                </div>
+                                            )}
                                             {quiz.shuffleQuestions && (
-                                                <div className="flex items-center gap-1" title="Questions shuffled for students"><Shuffle className="w-3.5 h-3.5 text-indigo-500" /> Shuffled</div>
+                                                <div className="flex items-center gap-1" title="Questions shuffled for each student"><Shuffle className="w-3.5 h-3.5 text-indigo-500" /> Shuffled</div>
                                             )}
                                         </div>
 
                                         {/* Actions */}
                                         {isTeacher ? (
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5">
                                                 <button 
                                                     onClick={() => { setSelectedQuiz(quiz); setView('analytics'); }}
-                                                    className="p-2 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1"
+                                                    className="p-2 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-xl text-xs font-bold transition-all flex items-center justify-center"
                                                     title="View Analytics & Reports"
                                                 >
                                                     <BarChart3 className="w-4 h-4" />
@@ -219,7 +239,7 @@ const QuizModule = ({ roomId, user }) => {
                                                 <button 
                                                     onClick={() => { setSelectedQuiz(quiz); setView('edit'); }}
                                                     className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl transition-all"
-                                                    title="Edit Settings"
+                                                    title="Edit Configuration"
                                                 >
                                                     <Edit className="w-4 h-4" />
                                                 </button>
@@ -247,7 +267,7 @@ const QuizModule = ({ roomId, user }) => {
                                                     : 'bg-pink-600 hover:bg-pink-700 text-white shadow-lg shadow-pink-600/25 active:scale-98'
                                                 }`}
                                             >
-                                                {quiz.hasAttempted ? 'View Evaluation & Review' : <><Play className="w-3.5 h-3.5 fill-current" /> Start Quiz Attempt</>}
+                                                {quiz.hasAttempted ? 'View Evaluation & Review' : (quiz.isInProgress ? <><RotateCcw className="w-3.5 h-3.5" /> Resume Quiz Attempt</> : <><Play className="w-3.5 h-3.5 fill-current" /> Start Quiz Attempt</>)}
                                             </button>
                                         )}
                                     </div>

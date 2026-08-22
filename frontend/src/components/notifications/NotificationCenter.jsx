@@ -12,10 +12,11 @@ import {
     Users, 
     AlertTriangle, 
     Clock, 
-    X, 
     ExternalLink, 
-    Layers, 
-    Sparkles 
+    Sparkles,
+    Calendar,
+    Settings,
+    ShieldAlert
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
 import { io } from 'socket.io-client';
@@ -35,12 +36,18 @@ const NotificationCenter = ({ user }) => {
             fetchRecentNotifications();
 
             // Socket.IO real-time notification listener
-            const socket = io(API_BASE_URL, { withCredentials: true });
+            const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
             socket.emit("joinUser", { userId: user._id });
 
             socket.on("notification:new", (newNotif) => {
                 setNotifications(prev => [newNotif, ...prev.filter(n => n._id !== newNotif._id)].slice(0, 30));
                 setUnreadCount(prev => prev + 1);
+            });
+
+            socket.on("notification:unread_count", ({ unreadCount: newCount }) => {
+                if (typeof newCount === 'number') {
+                    setUnreadCount(newCount);
+                }
             });
 
             return () => {
@@ -55,16 +62,25 @@ const NotificationCenter = ({ user }) => {
                 setIsOpen(false);
             }
         };
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen) {
+                setIsOpen(false);
+            }
+        };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isOpen]);
 
     const fetchUnreadCount = async () => {
         try {
             const res = await fetch(`${API_BASE_URL}/api/notifications/unread-count`, { credentials: 'include' });
             const data = await res.json();
             if (data.success) {
-                setUnreadCount(data.unreadCount || 0);
+                setUnreadCount(data.count ?? data.unreadCount ?? 0);
             }
         } catch (err) {
             console.error("Failed to fetch unread count", err);
@@ -145,6 +161,11 @@ const NotificationCenter = ({ user }) => {
         }
         setIsOpen(false);
 
+        if (notif.actionUrl) {
+            navigate(notif.actionUrl);
+            return;
+        }
+
         // Smart deep-linking based on notification type and entity
         if (notif.roomId) {
             const rId = notif.roomId._id || notif.roomId;
@@ -152,13 +173,19 @@ const NotificationCenter = ({ user }) => {
                 navigate(`/room/${rId}?tab=classwork`);
             } else if (notif.type.startsWith('quiz_')) {
                 navigate(`/room/${rId}?tab=quizzes`);
+            } else if (notif.type.startsWith('attendance_')) {
+                navigate(`/room/${rId}?tab=attendance`);
+            } else if (notif.type.startsWith('academic_') || notif.type.startsWith('performance_')) {
+                navigate(`/room/${rId}?tab=analytics`);
             } else if (notif.type.startsWith('announcement_') || notif.type.startsWith('classroom_')) {
                 navigate(`/room/${rId}?tab=stream`);
             } else {
                 navigate(`/room/${rId}`);
             }
-        } else if (notif.entityType === 'task') {
-            navigate('/room/personal');
+        } else if (notif.entityType === 'task' || notif.entityType === 'calendar') {
+            navigate('/calendar');
+        } else if (notif.entityType === 'analytics') {
+            navigate('/rooms');
         } else {
             navigate('/rooms');
         }
@@ -181,7 +208,7 @@ const NotificationCenter = ({ user }) => {
         if (type.startsWith('assignment_due_soon') || type.startsWith('assignment_overdue')) {
             return <AlertTriangle className="w-4 h-4 text-amber-500" />;
         }
-        if (type.startsWith('assignment_graded') || type.startsWith('quiz_graded')) {
+        if (type.startsWith('assignment_graded') || type.startsWith('quiz_graded') || type.startsWith('quiz_results_released')) {
             return <Award className="w-4 h-4 text-emerald-500" />;
         }
         if (type.startsWith('assignment_')) {
@@ -190,10 +217,16 @@ const NotificationCenter = ({ user }) => {
         if (type.startsWith('quiz_')) {
             return <Brain className="w-4 h-4 text-purple-500" />;
         }
+        if (type.startsWith('attendance_')) {
+            return <Calendar className="w-4 h-4 text-cyan-500" />;
+        }
+        if (type.startsWith('academic_') || type.startsWith('performance_')) {
+            return <ShieldAlert className="w-4 h-4 text-amber-500" />;
+        }
         if (type.startsWith('announcement_')) {
             return <MessageSquare className="w-4 h-4 text-blue-500" />;
         }
-        if (type.startsWith('classroom_')) {
+        if (type.startsWith('classroom_') || type.startsWith('student_') || type.startsWith('teacher_')) {
             return <Users className="w-4 h-4 text-indigo-500" />;
         }
         return <Sparkles className="w-4 h-4 text-pink-500" />;
@@ -211,6 +244,8 @@ const NotificationCenter = ({ user }) => {
                 onClick={() => { setIsOpen(!isOpen); if (!isOpen) fetchRecentNotifications(); }}
                 className="relative p-2.5 rounded-2xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 transition-all active:scale-95 focus:outline-none"
                 aria-label="Notifications"
+                aria-haspopup="true"
+                aria-expanded={isOpen}
             >
                 <Bell className="w-5 h-5" />
                 {unreadCount > 0 && (
@@ -222,7 +257,11 @@ const NotificationCenter = ({ user }) => {
 
             {/* Notification Dropdown Popover */}
             {isOpen && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 max-w-[calc(100vw-32px)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl z-50 overflow-hidden animate-scaleUp">
+                <div 
+                    role="dialog"
+                    aria-label="Notification dropdown"
+                    className="absolute right-0 mt-3 w-80 sm:w-96 max-w-[calc(100vw-32px)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl z-50 overflow-hidden animate-scaleUp"
+                >
                     {/* Header */}
                     <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-950/40">
                         <div className="flex items-center gap-2">
@@ -312,11 +351,18 @@ const NotificationCenter = ({ user }) => {
                                             {notif.message}
                                         </p>
 
-                                        {notif.roomId?.name && (
-                                            <span className="inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 mt-1">
-                                                {notif.roomId.name}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-1.5 pt-1">
+                                            {notif.roomId?.name && (
+                                                <span className="inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                                                    {notif.roomId.name}
+                                                </span>
+                                            )}
+                                            {notif.priority === 'urgent' && (
+                                                <span className="inline-block text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                                                    Urgent
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Quick Actions (Visible on hover) */}
@@ -344,7 +390,13 @@ const NotificationCenter = ({ user }) => {
                     </div>
 
                     {/* Footer */}
-                    <div className="p-3 border-t border-slate-100 dark:border-slate-800 text-center bg-slate-50/50 dark:bg-slate-950/40">
+                    <div className="p-3 border-t border-slate-100 dark:border-slate-800 text-center bg-slate-50/50 dark:bg-slate-950/40 flex items-center justify-between px-4">
+                        <button
+                            onClick={() => { setIsOpen(false); navigate('/notifications?tab=preferences'); }}
+                            className="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors flex items-center gap-1"
+                        >
+                            <Settings className="w-3.5 h-3.5" /> Settings
+                        </button>
                         <button
                             onClick={() => { setIsOpen(false); navigate('/notifications'); }}
                             className="text-xs font-black text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors inline-flex items-center gap-1"

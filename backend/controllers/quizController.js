@@ -62,17 +62,26 @@ function validateQuestion(q, idx) {
         if (isNaN(correctIdx) || (correctIdx !== 0 && correctIdx !== 1)) {
             throw new Error(`Question #${qNum}: True/False must have True or False selected.`);
         }
-    } else if (q.type === 'short_answer') {
-        // Valid by default
+    } else if (q.type === 'fill_blank') {
+        if (!q.correctAnswer || (typeof q.correctAnswer === 'string' && !q.correctAnswer.trim())) {
+            throw new Error(`Question #${qNum}: Fill in the Blank requires a correct expected answer.`);
+        }
+    } else if (q.type === 'short_answer' || q.type === 'long_answer') {
+        // Subjective questions - referenceAnswer is optional but recommended
     } else {
         throw new Error(`Question #${qNum}: Unsupported question type '${q.type}'.`);
     }
 }
 
-// Create a new Quiz
+// 1. Create a new Quiz
 module.exports.createQuiz = async (req, res) => {
     try {
-        const { title, description, roomId, timeLimit, totalMarks, deadline, topic, shuffleQuestions, allowedAttempts, showResultsImmediately, scheduledAt, isPublished } = req.body;
+        const {
+            title, description, roomId, timeLimit, totalMarks, passingMarks,
+            startDate, deadline, topic, shuffleQuestions, allowedAttempts,
+            showResultsImmediately, resultVisibility, resultReleaseDate,
+            safeMode, scheduledAt, isPublished
+        } = req.body;
         
         if (!title || !roomId || !timeLimit || !deadline) {
             return res.status(400).json({ message: "Missing required fields (title, roomId, timeLimit, deadline)" });
@@ -83,6 +92,25 @@ module.exports.createQuiz = async (req, res) => {
 
         const parsedAttempts = Math.max(1, Number(allowedAttempts) || 1);
         const parsedTimeLimit = Math.max(1, Number(timeLimit) || 15);
+        const cleanTopic = topic?.trim() || "General";
+
+        // Sync topic with room.topics
+        const roomObj = await Room.findById(roomId);
+        if (roomObj) {
+            if (!Array.isArray(roomObj.topics)) roomObj.topics = [];
+            if (!roomObj.topics.some(t => t.name.toLowerCase() === cleanTopic.toLowerCase())) {
+                roomObj.topics.push({ name: cleanTopic, order: roomObj.topics.length });
+                await roomObj.save();
+                if (req.io) req.io.to(roomId).emit("classroom_updated", { _id: roomObj._id, topics: roomObj.topics });
+            }
+        }
+
+        let status = 'draft';
+        if (isPublished) {
+            status = 'published';
+        } else if (scheduledAt && new Date(scheduledAt) > new Date()) {
+            status = 'scheduled';
+        }
 
         const quiz = await Quiz.create({
             title: title.trim(),
@@ -91,14 +119,25 @@ module.exports.createQuiz = async (req, res) => {
             createdBy: req.user._id,
             timeLimit: parsedTimeLimit,
             totalMarks: Number(totalMarks) || 0,
+            passingMarks: Number(passingMarks) || 0,
+            startDate: startDate ? new Date(startDate) : null,
             deadline: new Date(deadline),
-            topic: topic?.trim() || "General",
+            status,
+            isPublished: !!isPublished,
+            topic: cleanTopic,
             shuffleQuestions: !!shuffleQuestions,
             allowedAttempts: parsedAttempts,
             showResultsImmediately: showResultsImmediately !== undefined ? !!showResultsImmediately : true,
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-            isPublished: !!isPublished
+            resultVisibility: resultVisibility || (showResultsImmediately ? 'immediate' : 'manual_release'),
+            resultReleaseDate: resultReleaseDate ? new Date(resultReleaseDate) : null,
+            isResultsReleased: !!isPublished && (resultVisibility === 'immediate' || showResultsImmediately),
+            safeMode: !!safeMode,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null
         });
+
+        if (quiz.isPublished && req.io) {
+            req.io.to(roomId).emit("quizCreated", quiz);
+        }
 
         res.status(201).json({ success: true, quiz });
     } catch (error) {
@@ -106,7 +145,7 @@ module.exports.createQuiz = async (req, res) => {
     }
 };
 
-// Update Quiz details
+// 2. Update Quiz details
 module.exports.updateQuiz = async (req, res) => {
     try {
         const { id } = req.params;
@@ -118,21 +157,53 @@ module.exports.updateQuiz = async (req, res) => {
         const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
         if (!authorized) return res.status(403).json({ message: "Not authorized to update this quiz." });
 
-        const { title, description, timeLimit, totalMarks, deadline, topic, shuffleQuestions, allowedAttempts, showResultsImmediately, scheduledAt, isPublished } = req.body;
+        const {
+            title, description, timeLimit, totalMarks, passingMarks,
+            startDate, deadline, topic, shuffleQuestions, allowedAttempts,
+            showResultsImmediately, resultVisibility, resultReleaseDate,
+            safeMode, scheduledAt, isPublished
+        } = req.body;
 
         if (title !== undefined) quiz.title = title.trim();
         if (description !== undefined) quiz.description = description.trim();
         if (timeLimit !== undefined) quiz.timeLimit = Math.max(1, Number(timeLimit));
         if (totalMarks !== undefined) quiz.totalMarks = Number(totalMarks);
+        if (passingMarks !== undefined) quiz.passingMarks = Number(passingMarks);
+        if (startDate !== undefined) quiz.startDate = startDate ? new Date(startDate) : null;
         if (deadline !== undefined) quiz.deadline = new Date(deadline);
-        if (topic !== undefined) quiz.topic = topic.trim();
         if (shuffleQuestions !== undefined) quiz.shuffleQuestions = !!shuffleQuestions;
         if (allowedAttempts !== undefined) quiz.allowedAttempts = Math.max(1, Number(allowedAttempts));
         if (showResultsImmediately !== undefined) quiz.showResultsImmediately = !!showResultsImmediately;
+        if (resultVisibility !== undefined) quiz.resultVisibility = resultVisibility;
+        if (resultReleaseDate !== undefined) quiz.resultReleaseDate = resultReleaseDate ? new Date(resultReleaseDate) : null;
+        if (safeMode !== undefined) quiz.safeMode = !!safeMode;
         if (scheduledAt !== undefined) quiz.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
-        if (isPublished !== undefined) quiz.isPublished = !!isPublished;
+
+        if (topic !== undefined) {
+            const cleanTopic = topic.trim() || "General";
+            quiz.topic = cleanTopic;
+            // Sync topic with room.topics
+            const roomObj = await Room.findById(quiz.roomId);
+            if (roomObj) {
+                if (!Array.isArray(roomObj.topics)) roomObj.topics = [];
+                if (!roomObj.topics.some(t => t.name.toLowerCase() === cleanTopic.toLowerCase())) {
+                    roomObj.topics.push({ name: cleanTopic, order: roomObj.topics.length });
+                    await roomObj.save();
+                    if (req.io) req.io.to(quiz.roomId.toString()).emit("classroom_updated", { _id: roomObj._id, topics: roomObj.topics });
+                }
+            }
+        }
+
+        if (isPublished !== undefined) {
+            quiz.isPublished = !!isPublished;
+            quiz.status = quiz.isPublished ? 'published' : 'draft';
+        }
 
         await quiz.save();
+
+        if (req.io) {
+            req.io.to(quiz.roomId.toString()).emit("quizUpdated", quiz);
+        }
 
         res.json({ success: true, quiz });
     } catch (error) {
@@ -140,7 +211,7 @@ module.exports.updateQuiz = async (req, res) => {
     }
 };
 
-// Add / Replace questions to a quiz
+// 3. Add / Replace questions to a quiz
 module.exports.addQuestions = async (req, res) => {
     try {
         const { id } = req.params;
@@ -166,6 +237,8 @@ module.exports.addQuestions = async (req, res) => {
 
             formattedQuestions.push({
                 quizId: id,
+                roomId: quiz.roomId,
+                createdBy: req.user._id,
                 type: q.type || 'mcq',
                 questionText: q.questionText.trim(),
                 options: Array.isArray(q.options) ? q.options.map(opt => ({ text: opt.text?.trim() || '' })) : [],
@@ -174,7 +247,10 @@ module.exports.addQuestions = async (req, res) => {
                 marks,
                 order: q.order !== undefined ? Number(q.order) : i,
                 difficulty: q.difficulty || 'medium',
-                explanation: q.explanation?.trim() || ''
+                topic: q.topic?.trim() || quiz.topic || 'General',
+                explanation: q.explanation?.trim() || '',
+                imageUrl: q.imageUrl?.trim() || '',
+                isBankQuestion: !!q.isBankQuestion
             });
         }
 
@@ -197,7 +273,7 @@ module.exports.addQuestions = async (req, res) => {
     }
 };
 
-// Toggle Publish
+// 4. Toggle Publish or Publish Draft
 module.exports.publishQuiz = async (req, res) => {
     try {
         const { id } = req.params;
@@ -210,6 +286,7 @@ module.exports.publishQuiz = async (req, res) => {
         if (!authorized) return res.status(403).json({ message: "Not authorized to publish this quiz." });
 
         quiz.isPublished = !quiz.isPublished;
+        quiz.status = quiz.isPublished ? 'published' : 'draft';
         await quiz.save();
 
         if (quiz.isPublished && quiz.roomId) {
@@ -222,7 +299,7 @@ module.exports.publishQuiz = async (req, res) => {
                         actor: req.user._id,
                         type: "quiz_published",
                         title: "New Quiz Published",
-                        message: `Quiz "${quiz.title}" (${quiz.totalMarks} pts) is now live in "${room.name}".`,
+                        message: `Quiz "${quiz.title}" (${quiz.totalMarks} pts) is now available in "${room.name}".`,
                         entityType: "quiz",
                         entityId: quiz._id,
                         roomId: room._id,
@@ -233,13 +310,62 @@ module.exports.publishQuiz = async (req, res) => {
             }
         }
 
+        if (req.io) {
+            req.io.to(quiz.roomId.toString()).emit("quizUpdated", quiz);
+        }
+
         res.json({ success: true, quiz });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Delete Quiz
+// 5. Release Results to Students
+module.exports.releaseResults = async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid Quiz ID" });
+
+        const quiz = await Quiz.findById(id);
+        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+
+        const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
+        if (!authorized) return res.status(403).json({ message: "Not authorized to release results." });
+
+        quiz.isResultsReleased = true;
+        quiz.showResultsImmediately = true;
+        await quiz.save();
+
+        // Notify students who attempted the quiz
+        const attempts = await Attempt.find({ quizId: id, status: { $in: ['submitted', 'graded', 'expired'] } });
+        const studentIds = Array.from(new Set(attempts.map(a => a.studentId.toString())));
+
+        if (studentIds.length > 0) {
+            const notifs = studentIds.map(stId => ({
+                recipient: stId,
+                actor: req.user._id,
+                type: "quiz_results_released",
+                title: "Quiz Results Released",
+                message: `Results and answer explanations for "${quiz.title}" are now available for review.`,
+                entityType: "quiz",
+                entityId: quiz._id,
+                roomId: quiz.roomId,
+                metadata: { quizId: quiz._id }
+            }));
+            await notificationService.createManyNotifications(notifs, req.io);
+        }
+
+        if (req.io) {
+            req.io.to(quiz.roomId.toString()).emit("quizResultsReleased", { quizId: quiz._id });
+        }
+
+        res.json({ success: true, message: "Results released to all students.", quiz });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 6. Delete Quiz
 module.exports.deleteQuiz = async (req, res) => {
     try {
         const { id } = req.params;
@@ -255,13 +381,17 @@ module.exports.deleteQuiz = async (req, res) => {
         await Question.deleteMany({ quizId: id });
         await Attempt.deleteMany({ quizId: id });
 
+        if (req.io) {
+            req.io.to(quiz.roomId.toString()).emit("quizDeleted", { id, roomId: quiz.roomId });
+        }
+
         res.json({ success: true, message: "Quiz deleted successfully." });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// Get Quizzes by Room
+// 7. Get Quizzes by Room
 module.exports.getQuizzesByRoom = async (req, res) => {
     try {
         const { roomId } = req.params;
@@ -302,7 +432,7 @@ module.exports.getQuizzesByRoom = async (req, res) => {
     }
 };
 
-// Get Quiz details (sanitized for students)
+// 8. Get Quiz details (sanitized for students)
 module.exports.getQuizDetails = async (req, res) => {
     try {
         const { id } = req.params;
@@ -315,6 +445,12 @@ module.exports.getQuizDetails = async (req, res) => {
 
         if (userRole === 'student') {
             if (!quiz.isPublished) return res.status(403).json({ message: "Quiz is not published yet." });
+            if (quiz.startDate && new Date() < new Date(quiz.startDate)) {
+                return res.status(403).json({ message: `Quiz will open on ${new Date(quiz.startDate).toLocaleString()}.` });
+            }
+            if (quiz.scheduledAt && new Date() < new Date(quiz.scheduledAt)) {
+                return res.status(403).json({ message: `Quiz is scheduled to open on ${new Date(quiz.scheduledAt).toLocaleString()}.` });
+            }
             const room = await Room.findById(quiz.roomId);
             const isMember = room && (room.members?.some(m => m.toString() === req.user._id.toString()) || room.owner?.toString() === req.user._id.toString());
             if (!isMember) {
@@ -332,7 +468,8 @@ module.exports.getQuizDetails = async (req, res) => {
                 options: q.options,
                 marks: q.marks,
                 order: q.order,
-                difficulty: q.difficulty
+                difficulty: q.difficulty,
+                imageUrl: q.imageUrl || ''
             }));
             return res.json({ success: true, quiz, questions: safeQuestions });
         }
@@ -343,7 +480,7 @@ module.exports.getQuizDetails = async (req, res) => {
     }
 };
 
-// Start a Quiz Attempt
+// 9. Start a Quiz Attempt
 module.exports.startQuiz = async (req, res) => {
     try {
         const userRole = (req.user?.role || 'student').toLowerCase();
@@ -358,6 +495,13 @@ module.exports.startQuiz = async (req, res) => {
         if (!quiz) return res.status(404).json({ message: "Quiz not found" });
         if (!quiz.isPublished) return res.status(400).json({ message: "Quiz is not published yet." });
         if (new Date() > new Date(quiz.deadline)) return res.status(400).json({ message: "Quiz deadline has passed." });
+
+        if (quiz.startDate && new Date() < new Date(quiz.startDate)) {
+            return res.status(400).json({ message: `Quiz will open on ${new Date(quiz.startDate).toLocaleString()}.` });
+        }
+        if (quiz.scheduledAt && new Date() < new Date(quiz.scheduledAt)) {
+            return res.status(400).json({ message: `Quiz is scheduled to open on ${new Date(quiz.scheduledAt).toLocaleString()}.` });
+        }
 
         const room = await Room.findById(quiz.roomId);
         const isMember = room && (room.members?.some(m => m.toString() === req.user._id.toString()) || room.owner?.toString() === req.user._id.toString());
@@ -403,7 +547,8 @@ module.exports.startQuiz = async (req, res) => {
                 subjectiveMarks: 0,
                 percentage: 0,
                 isEvaluated: false,
-                answers: []
+                answers: [],
+                suspiciousEvents: []
             });
         }
 
@@ -432,7 +577,8 @@ module.exports.startQuiz = async (req, res) => {
             options: q.options,
             marks: q.marks,
             order: q.order,
-            difficulty: q.difficulty
+            difficulty: q.difficulty,
+            imageUrl: q.imageUrl || ''
         }));
 
         res.status(200).json({
@@ -447,7 +593,8 @@ module.exports.startQuiz = async (req, res) => {
                 allowedAttempts: quiz.allowedAttempts || 1,
                 status: attempt.status,
                 savedAnswers: attempt.answers || [],
-                flaggedQuestions: attempt.flaggedQuestions || []
+                flaggedQuestions: attempt.flaggedQuestions || [],
+                safeMode: quiz.safeMode || false
             },
             questions: safeQuestions
         });
@@ -456,7 +603,7 @@ module.exports.startQuiz = async (req, res) => {
     }
 };
 
-// Save in-progress answers and flags (Auto-save)
+// 10. Save in-progress answers and flags (Auto-save)
 module.exports.saveProgress = async (req, res) => {
     try {
         const userRole = (req.user?.role || 'student').toLowerCase();
@@ -467,6 +614,15 @@ module.exports.saveProgress = async (req, res) => {
 
         const attempt = await Attempt.findOne({ quizId: id, studentId: req.user._id, status: 'in_progress' });
         if (!attempt) return res.status(404).json({ message: "No active in-progress attempt found." });
+
+        const quiz = await Quiz.findById(id);
+        if (quiz && quiz.timeLimit) {
+            const elapsedMs = Date.now() - new Date(attempt.startedAt).getTime();
+            const maxAllowedMs = (quiz.timeLimit * 60 * 1000) + 60000;
+            if (elapsedMs > maxAllowedMs) {
+                return res.status(400).json({ message: "Attempt time limit expired. Progress cannot be saved." });
+            }
+        }
 
         if (Array.isArray(answers)) {
             attempt.answers = answers.map(a => ({
@@ -489,7 +645,36 @@ module.exports.saveProgress = async (req, res) => {
     }
 };
 
-// Final Submit Quiz
+// 11. Log Safe Mode Suspicious Telemetry Event
+module.exports.logSuspiciousEvent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { eventType, details } = req.body;
+
+        if (!eventType) return res.status(400).json({ message: "eventType is required." });
+
+        const attempt = await Attempt.findOne({ quizId: id, studentId: req.user._id, status: 'in_progress' });
+        if (!attempt) return res.status(404).json({ message: "Active attempt not found." });
+
+        if (!Array.isArray(attempt.suspiciousEvents)) {
+            attempt.suspiciousEvents = [];
+        }
+
+        attempt.suspiciousEvents.push({
+            eventType,
+            timestamp: new Date(),
+            details: details || ''
+        });
+
+        await attempt.save();
+
+        res.json({ success: true, count: attempt.suspiciousEvents.length });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 12. Final Submit Quiz with Auto-Grading for Objective and Pending for Subjective
 module.exports.attemptQuiz = async (req, res) => {
     try {
         const userRole = (req.user?.role || 'student').toLowerCase();
@@ -522,13 +707,14 @@ module.exports.attemptQuiz = async (req, res) => {
                 startedAt: new Date(),
                 status: 'in_progress',
                 attemptNumber: completedCount + 1,
-                answers: []
+                answers: [],
+                suspiciousEvents: []
             });
         }
 
-        // Server-Side Time Limit Enforcement (45s grace period)
+        // Server-Side Time Limit Enforcement (60s grace period)
         const elapsedMs = Date.now() - new Date(attempt.startedAt).getTime();
-        const maxAllowedMs = (quiz.timeLimit * 60 * 1000) + 45000;
+        const maxAllowedMs = (quiz.timeLimit * 60 * 1000) + 60000;
         let isExpired = elapsedMs > maxAllowedMs;
 
         const questions = await Question.find({ quizId: id });
@@ -543,13 +729,33 @@ module.exports.attemptQuiz = async (req, res) => {
             let marksAwarded = 0;
 
             if (userAns) {
-                if (q.type === 'short_answer') {
+                if (q.type === 'short_answer' || q.type === 'long_answer') {
                     requiresManualEvaluation = true;
                     processedAnswers.push({
                         questionId: q._id,
                         textAnswer: userAns.textAnswer || '',
                         marksAwarded: 0,
                         feedback: ''
+                    });
+                } else if (q.type === 'fill_blank') {
+                    // Auto-grade fill in the blank (trim & case-insensitive matching)
+                    const studentText = (userAns.textAnswer || '').trim().toLowerCase();
+                    let isCorrect = false;
+
+                    if (Array.isArray(q.correctAnswer)) {
+                        isCorrect = q.correctAnswer.some(ans => String(ans).trim().toLowerCase() === studentText);
+                    } else if (q.correctAnswer) {
+                        isCorrect = String(q.correctAnswer).trim().toLowerCase() === studentText;
+                    }
+
+                    if (isCorrect && !isExpired) {
+                        marksAwarded = q.marks;
+                        objectiveScore += q.marks;
+                    }
+                    processedAnswers.push({
+                        questionId: q._id,
+                        textAnswer: userAns.textAnswer || '',
+                        marksAwarded
                     });
                 } else if (q.type === 'multiple_select') {
                     const userSelected = Array.isArray(userAns.selectedOptions) ? [...userAns.selectedOptions].sort((a, b) => a - b) : [];
@@ -565,6 +771,7 @@ module.exports.attemptQuiz = async (req, res) => {
                         marksAwarded
                     });
                 } else {
+                    // MCQ & True/False
                     if (userAns.selectedOption !== null && userAns.selectedOption !== undefined && Number(userAns.selectedOption) === Number(q.correctAnswer) && !isExpired) {
                         marksAwarded = q.marks;
                         objectiveScore += q.marks;
@@ -579,6 +786,7 @@ module.exports.attemptQuiz = async (req, res) => {
                 processedAnswers.push({
                     questionId: q._id,
                     selectedOption: null,
+                    textAnswer: '',
                     marksAwarded: 0
                 });
             }
@@ -587,12 +795,14 @@ module.exports.attemptQuiz = async (req, res) => {
         const totalScore = objectiveScore + subjectiveScore;
         const totalMarks = quiz.totalMarks || questions.reduce((sum, q) => sum + q.marks, 0);
         const percentage = totalMarks > 0 ? Math.round((totalScore / totalMarks) * 100) : 0;
+        const timeSpentSeconds = Math.min(Math.floor(elapsedMs / 1000), quiz.timeLimit * 60);
 
         attempt.answers = processedAnswers;
         attempt.objectiveMarks = objectiveScore;
         attempt.subjectiveMarks = subjectiveScore;
         attempt.score = totalScore;
         attempt.percentage = percentage;
+        attempt.timeSpentSeconds = timeSpentSeconds;
         attempt.submittedAt = new Date();
         attempt.status = isExpired ? 'expired' : (requiresManualEvaluation ? 'submitted' : 'graded');
         attempt.isEvaluated = !requiresManualEvaluation && !isExpired;
@@ -618,9 +828,29 @@ module.exports.attemptQuiz = async (req, res) => {
             });
         }
 
+        // Result Visibility Check for response payload
+        let responseAttempt = attempt;
+        const isResultHidden = userRole === 'student' && (
+            (quiz.resultVisibility === 'manual_release' && !quiz.isResultsReleased && attempt.status !== 'graded') ||
+            (quiz.resultVisibility === 'scheduled_release' && quiz.resultReleaseDate && new Date() < new Date(quiz.resultReleaseDate)) ||
+            (!quiz.showResultsImmediately && !quiz.isResultsReleased && attempt.status !== 'graded')
+        );
+
+        if (isResultHidden) {
+            responseAttempt = {
+                _id: attempt._id,
+                attemptNumber: attempt.attemptNumber,
+                status: attempt.status,
+                submittedAt: attempt.submittedAt,
+                isEvaluated: attempt.isEvaluated,
+                timeSpentSeconds: attempt.timeSpentSeconds
+            };
+        }
+
         res.status(200).json({
             success: true,
-            attempt,
+            attempt: responseAttempt,
+            isResultHidden,
             message: isExpired ? "Quiz submitted after time limit expired." : "Quiz submitted successfully."
         });
     } catch (error) {
@@ -628,7 +858,7 @@ module.exports.attemptQuiz = async (req, res) => {
     }
 };
 
-// Get Student Result
+// 13. Get Student Result with Result Visibility Security
 module.exports.getStudentResult = async (req, res) => {
     try {
         const { id, studentId } = req.params;
@@ -661,23 +891,33 @@ module.exports.getStudentResult = async (req, res) => {
         if (!attempt) return res.status(404).json({ message: "Attempt not found" });
 
         const allAttempts = await Attempt.find({ quizId: id, studentId: targetStudentId, status: { $ne: 'in_progress' } })
-            .select('attemptNumber score percentage status submittedAt isEvaluated')
+            .select('attemptNumber score percentage status submittedAt isEvaluated timeSpentSeconds')
             .sort({ attemptNumber: 1 });
 
-        const questions = await Question.find({ quizId: id }).sort({ order: 1, createdAt: 1 });
-        const isResultHidden = userRole === 'student' && !quiz.showResultsImmediately && attempt.status !== 'graded';
+        // Result Visibility Check
+        let isResultHidden = false;
+        if (userRole === 'student') {
+            if (quiz.resultVisibility === 'manual_release' && !quiz.isResultsReleased && attempt.status !== 'graded') {
+                isResultHidden = true;
+            } else if (quiz.resultVisibility === 'scheduled_release' && quiz.resultReleaseDate && new Date() < new Date(quiz.resultReleaseDate)) {
+                isResultHidden = true;
+            } else if (!quiz.showResultsImmediately && !quiz.isResultsReleased && attempt.status !== 'graded') {
+                isResultHidden = true;
+            }
+        }
 
         if (isResultHidden) {
             return res.json({
                 success: true,
                 isResultHidden: true,
-                message: "Your quiz has been submitted successfully. Results will be available when your instructor releases them.",
+                message: "Your quiz has been submitted securely. Results and answer reviews will be available once released by your instructor.",
                 attempt: {
                     _id: attempt._id,
                     attemptNumber: attempt.attemptNumber,
                     status: attempt.status,
                     submittedAt: attempt.submittedAt,
-                    isEvaluated: attempt.isEvaluated
+                    isEvaluated: attempt.isEvaluated,
+                    timeSpentSeconds: attempt.timeSpentSeconds
                 },
                 quiz: {
                     _id: quiz._id,
@@ -685,11 +925,14 @@ module.exports.getStudentResult = async (req, res) => {
                     topic: quiz.topic,
                     totalMarks: quiz.totalMarks,
                     timeLimit: quiz.timeLimit,
-                    showResultsImmediately: quiz.showResultsImmediately
+                    passingMarks: quiz.passingMarks,
+                    resultVisibility: quiz.resultVisibility
                 },
                 allAttempts
             });
         }
+
+        const questions = await Question.find({ quizId: id }).sort({ order: 1, createdAt: 1 });
 
         res.json({
             success: true,
@@ -704,7 +947,7 @@ module.exports.getStudentResult = async (req, res) => {
     }
 };
 
-// Student: Get All My Attempts History
+// 14. Student: Get All My Attempts History
 module.exports.getMyAttempts = async (req, res) => {
     try {
         const { id } = req.params;
@@ -716,7 +959,7 @@ module.exports.getMyAttempts = async (req, res) => {
     }
 };
 
-// Teacher: Get Aggregate Quiz Results Overview
+// 15. Teacher: Get Aggregate Quiz Results Overview & Telemetry
 module.exports.getQuizResults = async (req, res) => {
     try {
         if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can view aggregate results." });
@@ -745,6 +988,10 @@ module.exports.getQuizResults = async (req, res) => {
         const lowestScore = totalAttempts > 0 ? Math.min(...scores) : 0;
         const averagePercentage = quiz.totalMarks > 0 ? Math.round((averageScore / quiz.totalMarks) * 100) : 0;
 
+        const passingScore = quiz.passingMarks || (quiz.totalMarks * 0.5);
+        const passedCount = attempts.filter(a => a.score >= passingScore).length;
+        const passRate = totalAttempts > 0 ? Math.round((passedCount / totalAttempts) * 100) : 0;
+
         res.json({ 
             success: true, 
             quiz,
@@ -756,7 +1003,9 @@ module.exports.getQuizResults = async (req, res) => {
                 averageScore: Number(averageScore.toFixed(1)),
                 averagePercentage,
                 highestScore,
-                lowestScore
+                lowestScore,
+                passRate,
+                passingScore
             },
             attempts,
             questions
@@ -766,7 +1015,7 @@ module.exports.getQuizResults = async (req, res) => {
     }
 };
 
-// Teacher: Get Single Attempt Details with Answers and Rubrics
+// 16. Teacher: Get Single Attempt Details
 module.exports.getAttemptDetail = async (req, res) => {
     try {
         if (req.user.role !== 'teacher') return res.status(403).json({ message: "Unauthorized." });
@@ -789,7 +1038,7 @@ module.exports.getAttemptDetail = async (req, res) => {
     }
 };
 
-// Teacher: Evaluate Attempt
+// 17. Teacher: Evaluate Attempt (Manual Subjective Grading)
 module.exports.evaluateAttempt = async (req, res) => {
     try {
         if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can evaluate attempts." });
@@ -846,7 +1095,7 @@ module.exports.evaluateAttempt = async (req, res) => {
         for (let ans of attempt.answers) {
             const q = qMap.get(ans.questionId.toString());
             if (q) {
-                if (q.type === 'short_answer') {
+                if (q.type === 'short_answer' || q.type === 'long_answer') {
                     subjMarks += (ans.marksAwarded || 0);
                 } else {
                     objMarks += (ans.marksAwarded || 0);
@@ -892,469 +1141,299 @@ module.exports.evaluateAttempt = async (req, res) => {
     }
 };
 
-// =========================================================================
-// PHASE 5: COMPREHENSIVE QUIZ ANALYTICS & REPORTING ENDPOINTS
-// =========================================================================
-
-// 1. Teacher: Comprehensive Quiz Analytics
-module.exports.getComprehensiveQuizAnalytics = async (req, res) => {
+// 18. QUESTION BANK: Get Reusable Question Bank Items
+module.exports.getQuestionBank = async (req, res) => {
     try {
-        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Unauthorized. Teacher role required." });
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can access Question Bank." });
 
-        const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid Quiz ID" });
+        const { roomId, topic, type, search } = req.query;
 
-        const quiz = await Quiz.findById(id).populate('createdBy', 'fullname email');
-        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+        let filter = {
+            $or: [
+                { isBankQuestion: true },
+                { createdBy: req.user._id }
+            ]
+        };
 
-        const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
-        if (!authorized) return res.status(403).json({ message: "Not authorized to access analytics for this classroom." });
-
-        const room = await Room.findById(quiz.roomId);
-        const enrolledStudents = (room?.members || []).filter(m => m.toString() !== room.owner?.toString());
-
-        const attempts = await Attempt.find({ quizId: id, status: { $ne: 'in_progress' } })
-            .populate('studentId', 'fullname email')
-            .sort({ attemptNumber: 1, createdAt: 1 });
-
-        const questions = await Question.find({ quizId: id }).sort({ order: 1, createdAt: 1 });
-
-        // Basic Counts
-        const totalAttempts = attempts.length;
-        const gradedAttempts = attempts.filter(a => a.status === 'graded');
-        const pendingCount = attempts.filter(a => a.status === 'submitted').length;
-        const expiredCount = attempts.filter(a => a.status === 'expired').length;
-
-        // Scores & Percentage Summary
-        const scores = attempts.map(a => a.score);
-        const percentages = attempts.map(a => a.percentage || (quiz.totalMarks > 0 ? Math.round((a.score / quiz.totalMarks) * 100) : 0));
-        
-        const averageScore = totalAttempts > 0 ? Number((scores.reduce((a, b) => a + b, 0) / totalAttempts).toFixed(1)) : 0;
-        const averagePercentage = totalAttempts > 0 ? Math.round(percentages.reduce((a, b) => a + b, 0) / totalAttempts) : 0;
-        const highestScore = totalAttempts > 0 ? Math.max(...scores) : 0;
-        const lowestScore = totalAttempts > 0 ? Math.min(...scores) : 0;
-
-        // Median calculation
-        let medianScore = 0;
-        if (totalAttempts > 0) {
-            const sortedScores = [...scores].sort((a, b) => a - b);
-            const mid = Math.floor(sortedScores.length / 2);
-            medianScore = sortedScores.length % 2 !== 0 ? sortedScores[mid] : Number(((sortedScores[mid - 1] + sortedScores[mid]) / 2).toFixed(1));
+        if (roomId && mongoose.Types.ObjectId.isValid(roomId)) {
+            filter.$or.push({ roomId });
         }
 
-        // Score Distribution (0-20, 21-40, 41-60, 61-80, 81-100)
-        const scoreDistribution = {
-            '0-20%': 0,
-            '21-40%': 0,
-            '41-60%': 0,
-            '61-80%': 0,
-            '81-100%': 0
-        };
+        if (topic && topic !== 'All') {
+            filter.topic = topic;
+        }
 
-        percentages.forEach(p => {
-            if (p <= 20) scoreDistribution['0-20%']++;
-            else if (p <= 40) scoreDistribution['21-40%']++;
-            else if (p <= 60) scoreDistribution['41-60%']++;
-            else if (p <= 80) scoreDistribution['61-80%']++;
-            else scoreDistribution['81-100%']++;
+        if (type && type !== 'All') {
+            filter.type = type;
+        }
+
+        if (search && search.trim()) {
+            filter.questionText = { $regex: search.trim(), $options: 'i' };
+        }
+
+        const questions = await Question.find(filter)
+            .populate('quizId', 'title')
+            .sort({ createdAt: -1 })
+            .limit(100);
+
+        // Group topics
+        const topics = await Question.distinct('topic', { createdBy: req.user._id });
+
+        res.json({ success: true, questions, topics: ['All', ...topics.filter(Boolean)] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 19. QUESTION BANK: Save Question to Bank
+module.exports.saveToQuestionBank = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can save to Question Bank." });
+
+        const { questionText, type, options, correctAnswer, referenceAnswer, marks, difficulty, topic, explanation, roomId } = req.body;
+
+        if (!questionText || !questionText.trim()) {
+            return res.status(400).json({ message: "Question text is required." });
+        }
+
+        const question = await Question.create({
+            roomId: roomId || null,
+            createdBy: req.user._id,
+            type: type || 'mcq',
+            questionText: questionText.trim(),
+            options: Array.isArray(options) ? options : [],
+            correctAnswer,
+            referenceAnswer: referenceAnswer?.trim() || '',
+            marks: Number(marks) || 1,
+            difficulty: difficulty || 'medium',
+            topic: topic?.trim() || 'General',
+            explanation: explanation?.trim() || '',
+            isBankQuestion: true
         });
 
-        // Time Analytics (duration in seconds)
-        const durations = attempts.map(a => {
-            if (a.submittedAt && a.startedAt) {
-                return Math.max(0, Math.floor((new Date(a.submittedAt).getTime() - new Date(a.startedAt).getTime()) / 1000));
-            }
-            return 0;
-        }).filter(d => d > 0);
+        res.status(201).json({ success: true, question });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
-        const averageDurationSeconds = durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
-        const fastestDurationSeconds = durations.length > 0 ? Math.min(...durations) : 0;
-        const longestDurationSeconds = durations.length > 0 ? Math.max(...durations) : 0;
+// 20. QUESTION BANK: Import Questions into Target Quiz
+module.exports.importQuestionsFromBank = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can import questions." });
 
-        // Topic Performance Summary
-        const topicSummary = {
-            topic: quiz.topic || 'General',
-            totalMarks: quiz.totalMarks,
-            averageScore,
-            averagePercentage,
-            attemptCount: totalAttempts
-        };
+        const { id } = req.params;
+        const { questionIds } = req.body;
 
-        // Question Level Correctness summary to derive insights
-        const questionMetrics = questions.map(q => {
-            let totalResponses = 0;
+        if (!Array.isArray(questionIds) || questionIds.length === 0) {
+            return res.status(400).json({ message: "questionIds array is required." });
+        }
+
+        const quiz = await Quiz.findById(id);
+        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+
+        const bankQuestions = await Question.find({ _id: { $in: questionIds } });
+        if (bankQuestions.length === 0) {
+            return res.status(400).json({ message: "No valid bank questions found." });
+        }
+
+        const currentCount = await Question.countDocuments({ quizId: id });
+        const importedDocs = bankQuestions.map((bq, idx) => ({
+            quizId: id,
+            roomId: quiz.roomId,
+            createdBy: req.user._id,
+            type: bq.type,
+            questionText: bq.questionText,
+            options: bq.options,
+            correctAnswer: bq.correctAnswer,
+            referenceAnswer: bq.referenceAnswer,
+            marks: bq.marks,
+            order: currentCount + idx,
+            difficulty: bq.difficulty,
+            topic: bq.topic || quiz.topic,
+            explanation: bq.explanation,
+            imageUrl: bq.imageUrl || ''
+        }));
+
+        await Question.insertMany(importedDocs);
+
+        // Recalculate total marks
+        const allQuizQuestions = await Question.find({ quizId: id });
+        quiz.totalMarks = allQuizQuestions.reduce((sum, q) => sum + (q.marks || 0), 0);
+        await quiz.save();
+
+        res.status(201).json({ success: true, count: importedDocs.length, totalMarks: quiz.totalMarks });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 21. AI Generation endpoint
+module.exports.generateQuizQuestions = async (req, res) => {
+    try {
+        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can generate questions with AI." });
+
+        const { notesText, questionCount = 5, difficultyMix } = req.body;
+
+        if (!notesText || !notesText.trim()) {
+            return res.status(400).json({ message: "Notes text is required for AI generation." });
+        }
+
+        const generated = await generateQuizQuestionsFromNotes(notesText, questionCount, difficultyMix);
+        res.json({ success: true, questions: generated });
+    } catch (error) {
+        console.error("AI Generation Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// 22. Comprehensive Analytics
+module.exports.getComprehensiveQuizAnalytics = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const quiz = await Quiz.findById(id);
+        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+
+        const attempts = await Attempt.find({ quizId: id, status: { $ne: 'in_progress' } }).populate('studentId', 'fullname email');
+        const questions = await Question.find({ quizId: id }).sort({ order: 1 });
+
+        const scores = attempts.map(a => a.score);
+        const total = attempts.length;
+        const avg = total > 0 ? (scores.reduce((a, b) => a + b, 0) / total) : 0;
+        const max = total > 0 ? Math.max(...scores) : 0;
+        const min = total > 0 ? Math.min(...scores) : 0;
+
+        // Score Distribution: 0-25%, 26-50%, 51-75%, 76-100%
+        const distribution = { '0-25%': 0, '26-50%': 0, '51-75%': 0, '76-100%': 0 };
+        attempts.forEach(a => {
+            const p = a.percentage || 0;
+            if (p <= 25) distribution['0-25%']++;
+            else if (p <= 50) distribution['26-50%']++;
+            else if (p <= 75) distribution['51-75%']++;
+            else distribution['76-100%']++;
+        });
+
+        // Question-Level Accuracy Analysis
+        const questionAnalytics = questions.map((q, idx) => {
             let correctCount = 0;
-
+            let totalAnswered = 0;
             attempts.forEach(att => {
-                const ans = att.answers.find(a => a.questionId.toString() === q._id.toString());
+                const ans = att.answers?.find(a => a.questionId?.toString() === q._id.toString());
                 if (ans) {
-                    totalResponses++;
-                    if (ans.marksAwarded === q.marks && q.marks > 0) {
-                        correctCount++;
-                    }
+                    totalAnswered++;
+                    if (ans.marksAwarded >= q.marks) correctCount++;
                 }
             });
-
-            const accuracy = totalResponses > 0 ? Math.round((correctCount / totalResponses) * 100) : 0;
+            const accuracy = totalAnswered > 0 ? Math.round((correctCount / totalAnswered) * 100) : 0;
             return {
                 questionId: q._id,
+                order: idx + 1,
                 questionText: q.questionText,
                 type: q.type,
                 marks: q.marks,
                 accuracy,
-                totalResponses,
-                correctCount
-            };
-        });
-
-        const sortedByAccuracy = [...questionMetrics].sort((a, b) => a.accuracy - b.accuracy);
-        const mostDifficultQuestion = sortedByAccuracy.length > 0 ? sortedByAccuracy[0] : null;
-        const easiestQuestion = sortedByAccuracy.length > 0 ? sortedByAccuracy[sortedByAccuracy.length - 1] : null;
-
-        // Student-by-student Performance Aggregation
-        const studentMap = new Map();
-        attempts.forEach(att => {
-            const sId = att.studentId?._id?.toString() || att.studentId?.toString();
-            if (!sId) return;
-
-            if (!studentMap.has(sId)) {
-                studentMap.set(sId, {
-                    studentId: sId,
-                    studentName: att.studentId?.fullname || 'Student',
-                    studentEmail: att.studentId?.email || '',
-                    attempts: [],
-                    bestScore: att.score,
-                    latestScore: att.score,
-                    latestPercentage: att.percentage || 0,
-                    status: att.status
-                });
-            }
-
-            const record = studentMap.get(sId);
-            const duration = (att.submittedAt && att.startedAt) ? Math.max(0, Math.floor((new Date(att.submittedAt).getTime() - new Date(att.startedAt).getTime()) / 1000)) : 0;
-
-            record.attempts.push({
-                attemptNumber: att.attemptNumber,
-                score: att.score,
-                percentage: att.percentage || 0,
-                durationSeconds: duration,
-                status: att.status,
-                submittedAt: att.submittedAt
-            });
-
-            if (att.score > record.bestScore) record.bestScore = att.score;
-            record.latestScore = att.score;
-            record.latestPercentage = att.percentage || 0;
-            record.status = att.status;
-        });
-
-        // Compute improvement delta for multiple attempts
-        const studentPerformances = Array.from(studentMap.values()).map(st => {
-            let improvementDelta = 0;
-            if (st.attempts.length >= 2) {
-                const firstPct = st.attempts[0].percentage;
-                const lastPct = st.attempts[st.attempts.length - 1].percentage;
-                improvementDelta = lastPct - firstPct;
-            }
-            return {
-                ...st,
-                attemptCount: st.attempts.length,
-                improvementDelta
+                correctCount,
+                totalAnswered,
+                isStrugglingTopic: accuracy < 40 && totalAnswered >= 3
             };
         });
 
         res.json({
             success: true,
             quiz,
-            summary: {
-                totalEnrolled: enrolledStudents.length,
-                uniqueStudentsAttempted: studentPerformances.length,
-                totalAttempts,
-                gradedCount: gradedAttempts.length,
-                pendingCount,
-                expiredCount,
-                averageScore,
-                averagePercentage,
-                highestScore,
-                lowestScore,
-                medianScore
+            overview: {
+                totalAttempts: total,
+                averageScore: Number(avg.toFixed(1)),
+                highestScore: max,
+                lowestScore: min,
+                averagePercentage: quiz.totalMarks > 0 ? Math.round((avg / quiz.totalMarks) * 100) : 0,
+                distribution
             },
-            scoreDistribution,
-            timeAnalytics: {
-                averageDurationSeconds,
-                fastestDurationSeconds,
-                longestDurationSeconds
-            },
-            topicAnalytics: topicSummary,
-            insights: {
-                mostDifficultQuestion,
-                easiestQuestion,
-                scoreSpread: highestScore - lowestScore
-            },
-            studentPerformances
+            questionAnalytics
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 2. Teacher: Question-Level Analytics & Option Distribution
+// 23. Question Level Analytics
 module.exports.getQuestionLevelAnalytics = async (req, res) => {
     try {
-        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Unauthorized. Teacher role required." });
-
         const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid Quiz ID" });
-
-        const quiz = await Quiz.findById(id);
-        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
-
-        const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
-        if (!authorized) return res.status(403).json({ message: "Not authorized to access question analytics." });
-
-        const questions = await Question.find({ quizId: id }).sort({ order: 1, createdAt: 1 });
+        const questions = await Question.find({ quizId: id }).sort({ order: 1 });
         const attempts = await Attempt.find({ quizId: id, status: { $ne: 'in_progress' } });
 
-        const questionAnalytics = questions.map((q, idx) => {
-            let totalResponses = 0;
-            let correctCount = 0;
-            let incorrectCount = 0;
-            let totalMarksAwarded = 0;
-
-            // Option selection count array
-            const optionFrequency = Array.isArray(q.options) ? q.options.map((opt, oIdx) => ({
-                index: oIdx,
-                text: opt.text,
-                count: 0,
-                percentage: 0,
-                isCorrect: q.type === 'multiple_select' 
-                    ? (Array.isArray(q.correctAnswer) && q.correctAnswer.includes(oIdx))
-                    : Number(q.correctAnswer) === oIdx
-            })) : [];
-
+        const analysis = questions.map((q, idx) => {
+            let correct = 0;
+            let answered = 0;
             attempts.forEach(att => {
-                const ans = att.answers.find(a => a.questionId.toString() === q._id.toString());
+                const ans = att.answers?.find(a => a.questionId?.toString() === q._id.toString());
                 if (ans) {
-                    totalResponses++;
-                    totalMarksAwarded += (ans.marksAwarded || 0);
-
-                    if (ans.marksAwarded === q.marks && q.marks > 0) {
-                        correctCount++;
-                    } else {
-                        incorrectCount++;
-                    }
-
-                    if (q.type === 'mcq' || q.type === 'true_false') {
-                        if (ans.selectedOption !== null && ans.selectedOption !== undefined && optionFrequency[ans.selectedOption]) {
-                            optionFrequency[ans.selectedOption].count++;
-                        }
-                    } else if (q.type === 'multiple_select' && Array.isArray(ans.selectedOptions)) {
-                        ans.selectedOptions.forEach(optIdx => {
-                            if (optionFrequency[optIdx]) {
-                                optionFrequency[optIdx].count++;
-                            }
-                        });
-                    }
+                    answered++;
+                    if (ans.marksAwarded >= q.marks) correct++;
                 }
             });
-
-            // Calculate option percentages
-            if (totalResponses > 0) {
-                optionFrequency.forEach(opt => {
-                    opt.percentage = Math.round((opt.count / totalResponses) * 100);
-                });
-            }
-
-            const accuracy = totalResponses > 0 ? Math.round((correctCount / totalResponses) * 100) : 0;
-            const averageMarks = totalResponses > 0 ? Number((totalMarksAwarded / totalResponses).toFixed(1)) : 0;
-
-            // Difficulty rule: >=80% -> Easy, 60-79% -> Moderate, <60% -> Difficult
-            let difficulty = 'Moderate';
-            if (q.type !== 'short_answer') {
-                if (accuracy >= 80) difficulty = 'Easy';
-                else if (accuracy < 60) difficulty = 'Difficult';
-            }
-
             return {
-                questionNumber: idx + 1,
-                questionId: q._id,
+                _id: q._id,
+                order: idx + 1,
                 questionText: q.questionText,
                 type: q.type,
                 marks: q.marks,
-                totalResponses,
-                correctCount,
-                incorrectCount,
-                accuracyPercentage: accuracy,
-                averageMarks,
-                difficulty,
-                options: optionFrequency
+                accuracy: answered > 0 ? Math.round((correct / answered) * 100) : 0,
+                totalResponses: answered
             };
         });
 
-        res.json({ success: true, quizTitle: quiz.title, totalAttempts: attempts.length, questions: questionAnalytics });
+        res.json({ success: true, questions: analysis });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 3. Student / Teacher: Individual Student Quiz Analytics
+// 24. Student Quiz Analytics
 module.exports.getStudentQuizAnalytics = async (req, res) => {
     try {
         const { id, studentId } = req.params;
-        const userRole = (req.user.role || 'student').toLowerCase();
-        const targetStudentId = studentId || req.user._id.toString();
-
-        if (userRole === 'student' && req.user._id.toString() !== targetStudentId) {
-            return res.status(403).json({ message: "Unauthorized. Students can only view their own analytics." });
-        }
-
-        const quiz = await Quiz.findById(id);
-        if (!quiz) return res.status(404).json({ message: "Quiz not found" });
-
-        if (userRole === 'student' && !quiz.isPublished) {
-            return res.status(403).json({ message: "Quiz is not published." });
-        }
-
-        if (userRole === 'teacher') {
-            const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
-            if (!authorized) return res.status(403).json({ message: "Unauthorized." });
-        }
-
-        const attempts = await Attempt.find({ quizId: id, studentId: targetStudentId, status: { $ne: 'in_progress' } })
-            .populate('studentId', 'fullname email')
-            .sort({ attemptNumber: 1 });
-
-        if (attempts.length === 0) {
-            return res.status(404).json({ message: "No completed attempts found for this student." });
-        }
-
-        const questions = await Question.find({ quizId: id }).sort({ order: 1, createdAt: 1 });
-
-        const attemptProgression = attempts.map(att => {
-            const duration = (att.submittedAt && att.startedAt) ? Math.max(0, Math.floor((new Date(att.submittedAt).getTime() - new Date(att.startedAt).getTime()) / 1000)) : 0;
-            
-            let correctQuestions = 0;
-            att.answers.forEach(ans => {
-                const q = questions.find(question => question._id.toString() === ans.questionId.toString());
-                if (q && ans.marksAwarded === q.marks && q.marks > 0) {
-                    correctQuestions++;
-                }
-            });
-
-            return {
-                attemptNumber: att.attemptNumber,
-                score: att.score,
-                percentage: att.percentage || (quiz.totalMarks > 0 ? Math.round((att.score / quiz.totalMarks) * 100) : 0),
-                durationSeconds: duration,
-                status: att.status,
-                submittedAt: att.submittedAt,
-                correctCount: correctQuestions,
-                totalQuestions: questions.length
-            };
-        });
-
-        const firstAttempt = attemptProgression[0];
-        const latestAttempt = attemptProgression[attemptProgression.length - 1];
-        const improvementPercentage = attemptProgression.length > 1 ? latestAttempt.percentage - firstAttempt.percentage : 0;
-
-        res.json({
-            success: true,
-            quiz: {
-                title: quiz.title,
-                topic: quiz.topic,
-                totalMarks: quiz.totalMarks
-            },
-            student: {
-                id: targetStudentId,
-                fullname: attempts[0].studentId?.fullname,
-                email: attempts[0].studentId?.email
-            },
-            totalAttempts: attempts.length,
-            bestScore: Math.max(...attempts.map(a => a.score)),
-            latestScore: latestAttempt.score,
-            latestPercentage: latestAttempt.percentage,
-            improvementPercentage,
-            attempts: attemptProgression
-        });
+        const attempts = await Attempt.find({ quizId: id, studentId, status: { $ne: 'in_progress' } }).sort({ attemptNumber: 1 });
+        res.json({ success: true, attempts });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// 4. Teacher: Export Quiz Results as CSV
+// 25. Export Quiz Results CSV
 module.exports.exportQuizResultsCSV = async (req, res) => {
     try {
-        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Unauthorized. Teacher role required." });
-
         const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid Quiz ID" });
-
         const quiz = await Quiz.findById(id);
         if (!quiz) return res.status(404).json({ message: "Quiz not found" });
 
-        const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
-        if (!authorized) return res.status(403).json({ message: "Unauthorized." });
+        const attempts = await Attempt.find({ quizId: id, status: { $ne: 'in_progress' } }).populate('studentId', 'fullname email');
 
-        const attempts = await Attempt.find({ quizId: id, status: { $ne: 'in_progress' } })
-            .populate('studentId', 'fullname email')
-            .sort({ studentId: 1, attemptNumber: 1 });
-
-        const headers = ["Student Name", "Email", "Attempt #", "Score", "Total Marks", "Percentage", "Status", "Submitted At"];
-        const rows = attempts.map(att => {
-            const studentName = (att.studentId?.fullname || 'Unknown').replace(/"/g, '""');
-            const studentEmail = (att.studentId?.email || '').replace(/"/g, '""');
-            const submittedStr = att.submittedAt ? new Date(att.submittedAt).toISOString() : '';
-            return `"${studentName}","${studentEmail}",${att.attemptNumber},${att.score},${quiz.totalMarks},"${att.percentage || 0}%","${att.status}","${submittedStr}"`;
+        let csv = 'Student Name,Email,Attempt #,Score,Max Marks,Percentage,Status,Submitted At\n';
+        attempts.forEach(a => {
+            csv += `"${a.studentId?.fullname || 'Unknown'}","${a.studentId?.email || ''}",${a.attemptNumber},${a.score},${quiz.totalMarks},${a.percentage}%,${a.status},"${a.submittedAt ? new Date(a.submittedAt).toISOString() : ''}"\n`;
         });
-
-        const csvContent = [headers.join(','), ...rows].join('\n');
 
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="quiz_${quiz._id}_results.csv"`);
-        return res.status(200).send(csvContent);
+        res.setHeader('Content-Disposition', `attachment; filename="${quiz.title.replace(/[^a-zA-Z0-9]/g, '_')}_results.csv"`);
+        res.send(csv);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// AI: Generate quiz questions from notes
-module.exports.generateQuizQuestions = async (req, res) => {
-    try {
-        if (req.user.role !== 'teacher') return res.status(403).json({ message: "Only teachers can generate quizzes." });
-
-        if (!isAiConfigured()) {
-            return res.status(503).json({ message: "AI is not configured. Set NIM_BASE_URL, NIM_API_KEY, and NIM_MODEL." });
-        }
-
-        const { notesText, questionCount, difficultyMix } = req.body;
-        if (!notesText || !questionCount) {
-            return res.status(400).json({ message: "Notes text and question count are required." });
-        }
-
-        const draft = await generateQuizQuestionsFromNotes({
-            notesText,
-            questionCount: Number(questionCount),
-            difficultyMix: difficultyMix || { easy: 50, medium: 30, hard: 20 }
-        });
-
-        return res.json({ success: true, questions: draft.questions });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
-// Get all attempts for a student
+// 26. Get Student Attempts across all quizzes
 module.exports.getStudentAttempts = async (req, res) => {
     try {
         const { roomId } = req.query;
-        let query = { studentId: req.user._id, status: { $ne: 'in_progress' } };
-        if (roomId && roomId !== 'all') {
-            query.roomId = roomId;
-        }
-        const attempts = await Attempt.find(query)
-            .populate('quizId', 'title totalMarks deadline topic')
-            .populate('roomId', 'name code')
+        let filter = { studentId: req.user._id };
+        if (roomId && roomId !== 'all') filter.roomId = roomId;
+
+        const attempts = await Attempt.find(filter)
+            .populate('quizId', 'title topic totalMarks deadline isPublished showResultsImmediately resultVisibility')
             .sort({ createdAt: -1 });
+
         res.json({ success: true, attempts });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

@@ -318,9 +318,14 @@ const ClassStreamTab = ({
                     <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight drop-shadow-md">
                         {roomDetails?.name || 'Classroom'}
                     </h1>
-                    {roomDetails?.room && (
-                        <p className="text-xs md:text-sm text-gray-300 mt-1">Room: {roomDetails.room}</p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-y-1 gap-x-3 mt-1.5 text-xs md:text-sm text-purple-100">
+                        {roomDetails?.owner?.fullname && (
+                            <span className="font-semibold text-white">Instructor: {roomDetails.owner.fullname}</span>
+                        )}
+                        {roomDetails?.room && (
+                            <span>&bull; Room {roomDetails.room}</span>
+                        )}
+                    </div>
                     {roomDetails?.description && (
                         <p className="text-xs md:text-sm text-gray-200/90 mt-1 max-w-2xl line-clamp-2">
                             {roomDetails.description}

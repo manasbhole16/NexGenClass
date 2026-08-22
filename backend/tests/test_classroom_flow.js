@@ -6,7 +6,8 @@ const Announcement = require('../models/announcement-model');
 const Task = require('../models/task-model');
 const Submission = require('../models/submission-model');
 const Attendance = require('../models/attendance-model');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://manas:manas2005@nexgenclass.jndf9.mongodb.net/?retryWrites=true&w=majority&appName=NexGenClass';
 
@@ -15,7 +16,17 @@ async function runTests() {
     console.log("STARTING NEXGENCLASS CORE CLASSROOM TEST SUITE");
     console.log("==================================================");
 
-    await mongoose.connect(MONGO_URI);
+    let connected = false;
+    for (let i = 0; i < 3; i++) {
+        try {
+            await mongoose.connect(MONGO_URI, { family: 4, serverSelectionTimeoutMS: 5000 });
+            connected = true;
+            break;
+        } catch (e) {
+            if (i === 2) throw e;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+    }
     console.log("✓ Connected to MongoDB");
 
     // Clean up or find test users

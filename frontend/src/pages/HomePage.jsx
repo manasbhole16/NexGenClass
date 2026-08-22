@@ -7,7 +7,8 @@ import {
     Plus, Search, ArrowLeft, Lock, Globe, LogOut, Settings, Trash2, Users,
     MessageSquare, ClipboardList, LayoutDashboard, Award, BrainCircuit, BarChart2,
     Calendar, CheckCircle, FileText, Filter, ChevronDown, ChevronRight, Layers,
-    BookOpen, CheckSquare, Paperclip, Clock, Sparkles
+    BookOpen, CheckSquare, Paperclip, Clock, Sparkles, FileSpreadsheet, MoreVertical,
+    Edit2, ArrowUp, ArrowDown, Send, FolderPlus, X, Brain
 } from 'lucide-react';
 import TaskCard from '../components/board/TaskCard';
 import NewTaskModal from '../components/NewTaskModal';
@@ -17,6 +18,7 @@ import API_BASE_URL from '../apiConfig';
 import PresenceAvatars from '../components/board/PresenceAvatars';
 import RoomChat from '../components/board/RoomChat';
 import QuizModule from '../components/quiz/QuizModule';
+import FormModule from '../components/forms/FormModule';
 import ClassroomAnalytics from '../components/analytics/ClassroomAnalytics';
 
 // Google Classroom Core Experience Components
@@ -25,6 +27,9 @@ import ClassPeopleTab from '../components/classroom/ClassPeopleTab';
 import ClassGradesTab from '../components/classroom/ClassGradesTab';
 import ClassSettingsModal from '../components/classroom/ClassSettingsModal';
 import NotificationCenter from '../components/notifications/NotificationCenter';
+import ClassroomFilesTab from '../components/files/ClassroomFilesTab';
+import StudyAssistant from '../components/ai/StudyAssistant';
+import LiveClassroom from '../components/live/LiveClassroom';
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -42,9 +47,9 @@ const Column = ({ col, tasks, setIsModalOpen, isTeacher }) => {
                     <div className={`w-3 h-3 rounded-full ${col.color.replace('/20', '')}`} />
                     <h3 className="font-medium text-gray-800 dark:text-gray-200">{col.title}</h3>
                 </div>
-                {isTeacher && (
-                    <Plus onClick={() => setIsModalOpen(true)} className="w-4 h-4 text-gray-500 cursor-pointer hover:text-purple-500" />
-                )}
+                <span className="text-xs bg-gray-100 dark:bg-white/5 px-2 py-1 rounded text-gray-600 dark:text-gray-400 font-mono">
+                    {tasks.length}
+                </span>
             </div>
             <SortableContext items={tasks.map(t => t._id)} strategy={verticalListSortingStrategy}>
                 <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3 min-h-[100px]">
@@ -61,6 +66,9 @@ const HomePage = ({ user, onLogout }) => {
     const [tasks, setTasks] = useState([]);
     const [activeId, setActiveId] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalTaskType, setModalTaskType] = useState('assignment');
+    const [modalInitialTopic, setModalInitialTopic] = useState('General');
+
     const [selectedAssignment, setSelectedAssignment] = useState(null);
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [typingUser, setTypingUser] = useState(null);
@@ -68,7 +76,7 @@ const HomePage = ({ user, onLogout }) => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [socket, setSocket] = useState(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState('stream'); // 'stream' | 'classwork' | 'people' | 'grades' | 'quizzes' | 'analytics'
+    const [activeTab, setActiveTab] = useState('stream'); // 'stream' | 'classwork' | 'people' | 'grades' | 'quizzes' | 'forms' | 'analytics'
     const [classworkView, setClassworkView] = useState('list'); // 'list' | 'kanban'
     const [showProfileInfo, setShowProfileInfo] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -76,6 +84,16 @@ const HomePage = ({ user, onLogout }) => {
     const [statusFilter, setStatusFilter] = useState('All');
     const [collapsedTopics, setCollapsedTopics] = useState({});
     const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+
+    // Topic Management Modals
+    const [isCreateTopicOpen, setIsCreateTopicOpen] = useState(false);
+    const [newTopicName, setNewTopicName] = useState('');
+    const [isRenameTopicOpen, setIsRenameTopicOpen] = useState(false);
+    const [renamingTopicOld, setRenamingTopicOld] = useState('');
+    const [renamingTopicNew, setRenamingTopicNew] = useState('');
+    const [activeTopicMenu, setActiveTopicMenu] = useState(null);
+    const [activeTaskMenu, setActiveTaskMenu] = useState(null);
+
     const navigate = useNavigate();
 
     const isTeacher = roomDetails?.owner === user?._id || roomDetails?.owner?._id === user?._id || user?.role === 'teacher';
@@ -153,6 +171,16 @@ const HomePage = ({ user, onLogout }) => {
             }
         });
 
+        s.on('topicRenamed', ({ oldName, newName }) => {
+            fetchTasks();
+            fetchRoomDetails();
+        });
+
+        s.on('topicDeleted', () => {
+            fetchTasks();
+            fetchRoomDetails();
+        });
+
         s.on('classroom_settings_updated', (updatedRoom) => {
             if (updatedRoom._id === roomId) {
                 setRoomDetails(prev => ({ ...prev, ...updatedRoom }));
@@ -166,68 +194,246 @@ const HomePage = ({ user, onLogout }) => {
             }
         });
 
-        return () => s.disconnect();
-    }, [roomId, isPersonal, user?._id]);
+        s.on('student_joined', (data) => {
+            if (data?.roomId === roomId || !data?.roomId) {
+                fetchRoomDetails();
+            }
+        });
 
-    const handleCreateTask = async (taskData) => {
-        try {
-            await fetch(`${API_BASE_URL}/api/tasks`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...taskData, roomId }),
-                credentials: 'include'
-            });
-            setIsModalOpen(false);
-            fetchTasks();
-        } catch (err) {
-            console.error("Error creating task", err);
-        }
-    };
+        s.on('student_removed', (data) => {
+            if (data?.roomId === roomId || !data?.roomId) {
+                if (data?.userId === user?._id) {
+                    alert("You have been removed from this classroom.");
+                    navigate('/rooms');
+                } else {
+                    fetchRoomDetails();
+                }
+            }
+        });
+
+        return () => {
+            if (user && !isPersonal) {
+                s.emit('leaveRoom', { roomId, user });
+            }
+            s.disconnect();
+        };
+    }, [roomId, user]);
 
     const handleDragEnd = async (event) => {
         const { active, over } = event;
         if (!over) return;
         const activeTask = tasks.find(t => t._id === active.id);
-        const overId = over.id;
-        let newStatus = activeTask.status;
-        if (COLUMNS.find(c => c.id === overId)) newStatus = overId;
-        else {
-            const overTask = tasks.find(t => t._id === overId);
-            if (overTask) newStatus = overTask.status;
-        }
-
-        if (activeTask.status !== newStatus) {
-            setTasks(prev => prev.map(t => t._id === active.id ? { ...t, status: newStatus } : t));
-            await fetch(`${API_BASE_URL}/api/tasks/${active.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus }),
-                credentials: 'include'
-            });
+        const overColumnId = over.id;
+        if (activeTask && activeTask.status !== overColumnId) {
+            const updated = { ...activeTask, status: overColumnId };
+            setTasks(tasks.map(t => t._id === active.id ? updated : t));
+            try {
+                await fetch(`${API_BASE_URL}/api/tasks/${active.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: overColumnId }),
+                    credentials: 'include'
+                });
+            } catch (err) {
+                console.error("Task update error", err);
+            }
         }
         setActiveId(null);
     };
 
-    const handleTyping = (isTyping) => {
-        if (socket && !isPersonal) {
-            socket.emit('typing', { roomId, user, isTyping });
+    const handleCreateTask = async (taskData) => {
+        try {
+            const payload = {
+                ...taskData,
+                roomId: isPersonal ? 'personal' : roomId
+            };
+            const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                fetchTasks();
+                fetchRoomDetails();
+            } else {
+                alert(data.message || "Failed to create task");
+            }
+        } catch (err) {
+            console.error("Error creating task", err);
         }
     };
 
-    // Extract unique topics for grouping and filter chips
-    const allTopics = useMemo(() => {
-        const set = new Set();
-        tasks.forEach(t => {
-            const tName = (t.topic || t.category || 'General').trim();
-            if (tName) set.add(tName);
-        });
-        return Array.from(set);
-    }, [tasks]);
+    const handleTyping = (isTyping) => {
+        if (!socket || isPersonal) return;
+        socket.emit('typing', { roomId, user, isTyping });
+    };
+
+    // TOPIC CRUD HANDLERS
+    const handleCreateTopic = async (e) => {
+        if (e) e.preventDefault();
+        if (!newTopicName.trim() || isPersonal) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/topics`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newTopicName.trim() }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                setNewTopicName('');
+                setIsCreateTopicOpen(false);
+                fetchRoomDetails();
+            } else {
+                alert(data.message || "Failed to create topic");
+            }
+        } catch (err) {
+            console.error("Failed to create topic", err);
+        }
+    };
+
+    const handleRenameTopic = async (e) => {
+        if (e) e.preventDefault();
+        if (!renamingTopicNew.trim() || !renamingTopicOld || isPersonal) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/topics`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ oldName: renamingTopicOld, newName: renamingTopicNew.trim() }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                setIsRenameTopicOpen(false);
+                setRenamingTopicOld('');
+                setRenamingTopicNew('');
+                fetchRoomDetails();
+                fetchTasks();
+            } else {
+                alert(data.message || "Failed to rename topic");
+            }
+        } catch (err) {
+            console.error("Failed to rename topic", err);
+        }
+    };
+
+    const handleDeleteTopic = async (topicName) => {
+        if (!window.confirm(`Are you sure you want to delete topic "${topicName}"? All classwork under this topic will be safely moved to 'General'.`)) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/topics`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topicName }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                setActiveTopicMenu(null);
+                fetchRoomDetails();
+                fetchTasks();
+            } else {
+                alert(data.message || "Failed to delete topic");
+            }
+        } catch (err) {
+            console.error("Failed to delete topic", err);
+        }
+    };
+
+    const handleMoveTopic = async (topicName, direction) => {
+        const currentTopics = (roomDetails?.topics || []).map(t => t.name);
+        const index = currentTopics.indexOf(topicName);
+        if (index === -1) return;
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= currentTopics.length) return;
+
+        const reordered = [...currentTopics];
+        const [moved] = reordered.splice(index, 1);
+        reordered.splice(newIndex, 0, moved);
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/topics/reorder`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topics: reordered }),
+                credentials: 'include'
+            });
+            const data = await res.json();
+            if (data.success) {
+                setActiveTopicMenu(null);
+                fetchRoomDetails();
+            }
+        } catch (err) {
+            console.error("Failed to reorder topics", err);
+        }
+    };
+
+    // Quick Task Actions
+    const handleQuickPublishTask = async (taskId) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isDraft: false }),
+                credentials: 'include'
+            });
+            if (res.ok) {
+                setActiveTaskMenu(null);
+                fetchTasks();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleQuickDeleteTask = async (taskId) => {
+        if (!window.confirm("Are you sure you want to delete this classwork?")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+            if (res.ok) {
+                setActiveTaskMenu(null);
+                fetchTasks();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleMoveTaskToTopic = async (taskId, newTopic) => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: newTopic }),
+                credentials: 'include'
+            });
+            if (res.ok) {
+                setActiveTaskMenu(null);
+                fetchTasks();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    // Derived Topic lists
+    const roomTopicsList = useMemo(() => {
+        const list = (roomDetails?.topics || []).map(t => t.name).filter(Boolean);
+        const taskTopics = tasks.map(t => (t.topic || t.category || 'General').trim()).filter(Boolean);
+        const combined = Array.from(new Set(['General', ...list, ...taskTopics]));
+        return combined;
+    }, [roomDetails, tasks]);
+
+    const allTopics = roomTopicsList;
 
     // Filtered tasks for Classwork Tab
     const filteredTasks = useMemo(() => {
         return tasks.filter(t => {
-            const topic = (t.topic || t.category || 'General').trim();
+            const topic = (t.topic || t.category || 'General').trim() || 'General';
             const matchesSearch = !searchQuery.trim() ||
                 t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -245,16 +451,32 @@ const HomePage = ({ user, onLogout }) => {
         });
     }, [tasks, searchQuery, selectedTopicFilter, statusFilter]);
 
-    // Tasks grouped by topic
+    // Tasks grouped by topic in correct order
     const tasksByTopic = useMemo(() => {
         const groups = {};
+        // Initialize all room topics first to ensure order is preserved
+        allTopics.forEach(tName => {
+            if (selectedTopicFilter === 'All' || selectedTopicFilter === tName) {
+                groups[tName] = [];
+            }
+        });
+
         filteredTasks.forEach(task => {
             const topic = (task.topic || task.category || 'General').trim() || 'General';
             if (!groups[topic]) groups[topic] = [];
             groups[topic].push(task);
         });
-        return groups;
-    }, [filteredTasks]);
+
+        // Filter out empty topics if user is searching or if student
+        const result = {};
+        Object.entries(groups).forEach(([name, items]) => {
+            if (items.length > 0 || (isTeacher && !searchQuery.trim() && selectedTopicFilter === 'All')) {
+                result[name] = items;
+            }
+        });
+
+        return result;
+    }, [filteredTasks, allTopics, isTeacher, searchQuery, selectedTopicFilter]);
 
     const toggleTopicCollapse = (topicName) => {
         setCollapsedTopics(prev => ({
@@ -332,22 +554,24 @@ const HomePage = ({ user, onLogout }) => {
                             </div>
 
                             {showProfileInfo && (
-                                <div className="absolute top-12 right-0 w-64 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-4 shadow-2xl z-50 flex flex-col gap-3 animate-in fade-in duration-100">
-                                    <div className="flex items-center gap-3 border-b border-gray-100 dark:border-white/5 pb-3">
-                                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">
+                                <div className="absolute top-12 right-0 w-64 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-4 shadow-2xl z-50 flex flex-col gap-3 animate-in fade-in">
+                                    <div className="flex items-center gap-3 border-b border-gray-200 dark:border-white/10 pb-3">
+                                        <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold">
                                             {user?.fullname?.[0]?.toUpperCase() || 'U'}
                                         </div>
                                         <div className="overflow-hidden">
-                                            <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{user?.fullname}</p>
-                                            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                                            <p className="text-[10px] uppercase font-bold text-purple-400 mt-0.5">{user?.role}</p>
+                                            <p className="font-bold text-sm truncate text-gray-900 dark:text-white">{user?.fullname}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                                            <span className="inline-block text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400 mt-0.5">
+                                                {user?.role}
+                                            </span>
                                         </div>
                                     </div>
                                     <button
                                         onClick={onLogout}
-                                        className="w-full px-4 py-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-colors"
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 rounded-xl text-xs font-bold transition-colors"
                                     >
-                                        Sign Out
+                                        <LogOut className="w-4 h-4" /> Log Out
                                     </button>
                                 </div>
                             )}
@@ -355,84 +579,136 @@ const HomePage = ({ user, onLogout }) => {
                     </div>
                 </div>
 
-                {/* Google Classroom Core Tabs Navigation */}
-                <div className="flex gap-6 overflow-x-auto custom-scrollbar px-2 -mb-2">
-                    <button
-                        onClick={() => setActiveTab('stream')}
-                        className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
-                            activeTab === 'stream'
-                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        Stream
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('classwork')}
-                        className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
-                            activeTab === 'classwork'
-                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        Classwork
-                    </button>
+                {/* Navigation Tabs */}
+                <div className="flex items-center gap-1 sm:gap-6 overflow-x-auto custom-scrollbar pt-2 border-t border-gray-100 dark:border-white/5">
                     {!isPersonal && (
                         <button
-                            onClick={() => setActiveTab('people')}
-                            className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
-                                activeTab === 'people'
-                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                            onClick={() => setActiveTab('stream')}
+                            className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                activeTab === 'stream'
+                                    ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                    : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
                             }`}
                         >
-                            People
+                            Stream
                         </button>
                     )}
+
                     <button
-                        onClick={() => setActiveTab('grades')}
-                        className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
-                            activeTab === 'grades'
-                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
+                        onClick={() => setActiveTab('classwork')}
+                        className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                            activeTab === 'classwork'
+                                ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
                                 : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
                         }`}
                     >
-                        Grades
+                        <ClipboardList className="w-4 h-4" />
+                        {isPersonal ? 'Tasks' : 'Classwork'}
                     </button>
-                    <button
-                        onClick={() => setActiveTab('quizzes')}
-                        className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
-                            activeTab === 'quizzes'
-                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        Quizzes
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('analytics')}
-                        className={`pb-3 text-sm font-semibold transition-all border-b-2 whitespace-nowrap ${
-                            activeTab === 'analytics'
-                                ? 'border-purple-600 text-purple-600 dark:border-purple-500 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        Analytics
-                    </button>
+
+                    {!isPersonal && (
+                        <>
+                            <button
+                                onClick={() => setActiveTab('people')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'people'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Users className="w-4 h-4" /> People
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('grades')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'grades'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Award className="w-4 h-4" /> Grades
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('quizzes')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'quizzes'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <BrainCircuit className="w-4 h-4" /> Quizzes
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('forms')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'forms'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <FileSpreadsheet className="w-4 h-4" /> Forms
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('resources')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'resources'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Folder className="w-4 h-4" /> Resources
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('analytics')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'analytics'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <BarChart2 className="w-4 h-4" /> Analytics
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('live')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'live'
+                                        ? 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Video className="w-4 h-4" /> Live Class
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('ai')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'ai'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-purple-600/70 dark:text-purple-400/70 hover:text-purple-600 dark:hover:text-purple-300'
+                                }`}
+                            >
+                                <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-pulse" />
+                                {isTeacher ? 'Teaching Copilot' : 'AI Assistant'}
+                            </button>
+                        </>
+                    )}
                 </div>
             </header>
 
             {/* TAB 1: STREAM */}
-            {activeTab === 'stream' && (
+            {activeTab === 'stream' && !isPersonal && (
                 <ClassStreamTab
                     roomId={roomId}
                     roomDetails={roomDetails}
                     user={user}
-                    tasks={tasks}
-                    socket={socket}
                     onOpenAssignment={(task) => setSelectedAssignment(task)}
-                    onOpenSettings={() => setIsSettingsOpen(true)}
-                    onNavigateToClasswork={() => setActiveTab('classwork')}
+                    onOpenPeople={() => setActiveTab('people')}
                 />
             )}
 
@@ -443,13 +719,13 @@ const HomePage = ({ user, onLogout }) => {
                     {/* Top Action Bar */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                         
-                        {/* Search & Topic Chips */}
+                        {/* Search & View Switcher */}
                         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                             <div className="relative flex-1 sm:w-64">
                                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 <input
                                     type="text"
-                                    placeholder="Search classwork..."
+                                    placeholder="Search classwork or materials..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full pl-9 pr-3 py-2 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl text-xs focus:border-purple-500 outline-none text-gray-900 dark:text-white"
@@ -485,7 +761,7 @@ const HomePage = ({ user, onLogout }) => {
 
                         {/* Teacher Actions / Create Dropdown */}
                         {(isPersonal || isTeacher) && (
-                            <div className="relative">
+                            <div className="relative flex items-center gap-2">
                                 <button
                                     onClick={() => setShowCreateDropdown(!showCreateDropdown)}
                                     className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-full font-bold shadow-lg shadow-purple-600/20 transition-all active:scale-95 text-xs"
@@ -494,24 +770,51 @@ const HomePage = ({ user, onLogout }) => {
                                 </button>
 
                                 {showCreateDropdown && (
-                                    <div className="absolute right-0 top-12 w-52 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-2 shadow-2xl z-30 space-y-1 animate-in fade-in">
+                                    <div className="absolute right-0 top-12 w-56 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-2 shadow-2xl z-30 space-y-1 animate-in fade-in">
                                         <button
-                                            onClick={() => { setShowCreateDropdown(false); setIsModalOpen(true); }}
+                                            onClick={() => {
+                                                setShowCreateDropdown(false);
+                                                setModalTaskType('assignment');
+                                                setModalInitialTopic('General');
+                                                setIsModalOpen(true);
+                                            }}
                                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 rounded-xl transition-colors text-left"
                                         >
                                             <FileText className="w-4 h-4 text-purple-500" /> Assignment
                                         </button>
                                         <button
-                                            onClick={() => { setShowCreateDropdown(false); setIsModalOpen(true); }}
+                                            onClick={() => {
+                                                setShowCreateDropdown(false);
+                                                setModalTaskType('material');
+                                                setModalInitialTopic('General');
+                                                setIsModalOpen(true);
+                                            }}
                                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-cyan-50 dark:hover:bg-cyan-500/10 hover:text-cyan-600 dark:hover:text-cyan-400 rounded-xl transition-colors text-left"
                                         >
                                             <BookOpen className="w-4 h-4 text-cyan-500" /> Reference Material
                                         </button>
+                                        {!isPersonal && (
+                                            <button
+                                                onClick={() => {
+                                                    setShowCreateDropdown(false);
+                                                    setIsCreateTopicOpen(true);
+                                                }}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl transition-colors text-left"
+                                            >
+                                                <FolderPlus className="w-4 h-4 text-emerald-500" /> Topic
+                                            </button>
+                                        )}
                                         <button
-                                            onClick={() => { setShowCreateDropdown(false); setIsModalOpen(true); }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-xl transition-colors text-left"
+                                            onClick={() => { setShowCreateDropdown(false); setActiveTab('quizzes'); }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-pink-50 dark:hover:bg-pink-500/10 hover:text-pink-600 dark:hover:text-pink-400 rounded-xl transition-colors text-left"
                                         >
-                                            <Layers className="w-4 h-4 text-emerald-500" /> Topic
+                                            <Brain className="w-4 h-4 text-pink-500" /> Quiz / Assessment
+                                        </button>
+                                        <button
+                                            onClick={() => { setShowCreateDropdown(false); setActiveTab('forms'); }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-800 dark:text-gray-200 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 rounded-xl transition-colors text-left"
+                                        >
+                                            <FileSpreadsheet className="w-4 h-4 text-purple-500" /> Google Form
                                         </button>
                                     </div>
                                 )}
@@ -524,7 +827,7 @@ const HomePage = ({ user, onLogout }) => {
                         <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-3 mb-4">
                             <button
                                 onClick={() => setSelectedTopicFilter('All')}
-                                className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                                className={`px-3.5 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
                                     selectedTopicFilter === 'All'
                                         ? 'bg-purple-600 text-white shadow-sm'
                                         : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
@@ -536,7 +839,7 @@ const HomePage = ({ user, onLogout }) => {
                                 <button
                                     key={topic}
                                     onClick={() => setSelectedTopicFilter(topic)}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                                    className={`px-3.5 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
                                         selectedTopicFilter === topic
                                             ? 'bg-purple-600 text-white shadow-sm'
                                             : 'bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10'
@@ -550,15 +853,15 @@ const HomePage = ({ user, onLogout }) => {
 
                     {/* Classwork Views: List (Topics) vs Kanban */}
                     {classworkView === 'list' ? (
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6 w-full">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-8 w-full">
                             {Object.keys(tasksByTopic).length === 0 ? (
-                                <div className="text-center py-16 bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/5 rounded-2xl text-gray-500 space-y-3">
+                                <div className="text-center py-16 bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/5 rounded-3xl text-gray-500 space-y-3">
                                     <ClipboardList className="w-12 h-12 mx-auto text-purple-500/40" />
                                     <h3 className="font-bold text-base text-gray-800 dark:text-gray-200">No classwork found</h3>
                                     <p className="text-xs text-gray-400 max-w-sm mx-auto">
                                         {isTeacher
-                                            ? "Click '+ Create' above to assign tasks, assignments, or add course materials."
-                                            : "This is where you'll see assignments and coursework assigned by your instructor."}
+                                            ? "Click '+ Create' above to assign coursework or create a topic module."
+                                            : "This is where you'll see coursework and reference materials assigned by your instructor."}
                                     </p>
                                 </div>
                             ) : (
@@ -569,11 +872,11 @@ const HomePage = ({ user, onLogout }) => {
                                         <div key={topicName} className="space-y-3">
                                             
                                             {/* Topic Header Banner */}
-                                            <div
-                                                onClick={() => toggleTopicCollapse(topicName)}
-                                                className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-white/10 cursor-pointer group"
-                                            >
-                                                <div className="flex items-center gap-2">
+                                            <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-white/10 group">
+                                                <div
+                                                    onClick={() => toggleTopicCollapse(topicName)}
+                                                    className="flex items-center gap-2 cursor-pointer select-none"
+                                                >
                                                     {isCollapsed ? (
                                                         <ChevronRight className="w-4 h-4 text-purple-500" />
                                                     ) : (
@@ -582,74 +885,195 @@ const HomePage = ({ user, onLogout }) => {
                                                     <h2 className="text-base font-bold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center gap-2">
                                                         <Layers className="w-4 h-4 text-purple-500" /> {topicName}
                                                     </h2>
+                                                    <span className="text-xs text-gray-400 font-medium ml-1">
+                                                        ({topicTasks.length} {topicTasks.length === 1 ? 'item' : 'items'})
+                                                    </span>
                                                 </div>
-                                                <span className="text-xs text-gray-400 font-medium">
-                                                    {topicTasks.length} {topicTasks.length === 1 ? 'item' : 'items'}
-                                                </span>
+
+                                                {/* Topic Actions Menu for Teacher */}
+                                                {isTeacher && !isPersonal && (
+                                                    <div className="relative flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setModalTaskType('assignment');
+                                                                setModalInitialTopic(topicName);
+                                                                setIsModalOpen(true);
+                                                            }}
+                                                            className="p-1 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 rounded-lg text-xs font-bold flex items-center gap-1"
+                                                            title="Add assignment to this topic"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" />
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveTopicMenu(activeTopicMenu === topicName ? null : topicName)}
+                                                            className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg"
+                                                        >
+                                                            <MoreVertical className="w-4 h-4" />
+                                                        </button>
+
+                                                        {activeTopicMenu === topicName && (
+                                                            <div className="absolute right-0 top-7 w-44 bg-white dark:bg-[#1f1f23] border border-gray-200 dark:border-white/10 rounded-2xl p-1.5 shadow-2xl z-20 space-y-1 animate-in fade-in">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setActiveTopicMenu(null);
+                                                                        setRenamingTopicOld(topicName);
+                                                                        setRenamingTopicNew(topicName);
+                                                                        setIsRenameTopicOpen(true);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 rounded-xl"
+                                                                >
+                                                                    <Edit2 className="w-3.5 h-3.5" /> Rename Topic
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleMoveTopic(topicName, 'up')}
+                                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-xl"
+                                                                >
+                                                                    <ArrowUp className="w-3.5 h-3.5" /> Move Up
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleMoveTopic(topicName, 'down')}
+                                                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-xl"
+                                                                >
+                                                                    <ArrowDown className="w-3.5 h-3.5" /> Move Down
+                                                                </button>
+                                                                {topicName !== 'General' && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteTopic(topicName)}
+                                                                        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" /> Delete Topic
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Topic Task Items */}
                                             {!isCollapsed && (
                                                 <div className="space-y-2.5">
-                                                    {topicTasks.map(task => {
-                                                        const isDueSoon = task.dueDate && new Date(task.dueDate) > new Date() && (new Date(task.dueDate) - new Date() < 3 * 24 * 60 * 60 * 1000);
-                                                        const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
+                                                    {topicTasks.length === 0 ? (
+                                                        <div className="py-6 border-2 border-dashed border-gray-200 dark:border-white/5 rounded-2xl text-center text-xs text-gray-400">
+                                                            No items in this topic module yet.
+                                                        </div>
+                                                    ) : (
+                                                        topicTasks.map(task => {
+                                                            const isDueSoon = task.dueDate && new Date(task.dueDate) > new Date() && (new Date(task.dueDate) - new Date() < 3 * 24 * 60 * 60 * 1000);
+                                                            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
 
-                                                        return (
-                                                            <div
-                                                                key={task._id}
-                                                                onClick={() => setSelectedAssignment(task)}
-                                                                className="bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:shadow-xl hover:border-purple-400 dark:hover:border-purple-500/50 transition-all cursor-pointer group"
-                                                            >
-                                                                <div className="flex items-center gap-3.5 overflow-hidden">
-                                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform ${
-                                                                        task.taskType === 'material'
-                                                                            ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
-                                                                            : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                                                                    }`}>
-                                                                        {task.taskType === 'material' ? (
-                                                                            <BookOpen className="w-5 h-5" />
-                                                                        ) : (
-                                                                            <FileText className="w-5 h-5" />
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="overflow-hidden">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <h3 className="font-bold text-sm text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
-                                                                                {task.title}
-                                                                            </h3>
-                                                                            {task.isDraft && (
-                                                                                <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">
-                                                                                    Draft
-                                                                                </span>
+                                                            return (
+                                                                <div
+                                                                    key={task._id}
+                                                                    className="bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:shadow-xl hover:border-purple-400 dark:hover:border-purple-500/50 transition-all cursor-pointer group relative"
+                                                                >
+                                                                    <div
+                                                                        onClick={() => setSelectedAssignment(task)}
+                                                                        className="flex items-center gap-3.5 overflow-hidden flex-1"
+                                                                    >
+                                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform ${
+                                                                            task.taskType === 'material'
+                                                                                ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+                                                                                : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                                                        }`}>
+                                                                            {task.taskType === 'material' ? (
+                                                                                <BookOpen className="w-5 h-5" />
+                                                                            ) : (
+                                                                                <FileText className="w-5 h-5" />
                                                                             )}
                                                                         </div>
-                                                                        {task.dueDate && (
-                                                                            <p className={`text-xs flex items-center gap-1 mt-0.5 ${
-                                                                                isOverdue ? 'text-red-400 font-semibold' : isDueSoon ? 'text-amber-500 font-semibold' : 'text-gray-500 dark:text-gray-400'
-                                                                            }`}>
-                                                                                <Clock className="w-3 h-3" />
-                                                                                Due {new Date(task.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                                            </p>
+                                                                        <div className="overflow-hidden">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <h3 className="font-bold text-sm text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">
+                                                                                    {task.title}
+                                                                                </h3>
+                                                                                {task.isDraft && (
+                                                                                    <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">
+                                                                                        Draft
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            {task.dueDate && (
+                                                                                <p className={`text-xs flex items-center gap-1 mt-0.5 ${
+                                                                                    isOverdue ? 'text-red-400 font-semibold' : isDueSoon ? 'text-amber-500 font-semibold' : 'text-gray-500 dark:text-gray-400'
+                                                                                }`}>
+                                                                                    <Clock className="w-3 h-3" />
+                                                                                    Due {new Date(task.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-2 self-end sm:self-center">
+                                                                        {Array.isArray(task.attachments) && task.attachments.length > 0 && (
+                                                                            <span className="text-xs bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-lg text-gray-500 flex items-center gap-1" title={`${task.attachments.length} attachments`}>
+                                                                                <Paperclip className="w-3 h-3" /> {task.attachments.length}
+                                                                            </span>
+                                                                        )}
+                                                                        {task.taskType !== 'material' && (
+                                                                            <span className="text-xs font-bold px-3 py-1 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full">
+                                                                                {task.maxMarks || 100} pts
+                                                                            </span>
+                                                                        )}
+
+                                                                        {/* Card Context Menu for Teacher */}
+                                                                        {isTeacher && (
+                                                                            <div className="relative">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setActiveTaskMenu(activeTaskMenu === task._id ? null : task._id);
+                                                                                    }}
+                                                                                    className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-lg"
+                                                                                >
+                                                                                    <MoreVertical className="w-4 h-4" />
+                                                                                </button>
+
+                                                                                {activeTaskMenu === task._id && (
+                                                                                    <div className="absolute right-0 top-7 w-40 bg-white dark:bg-[#1f1f23] border border-gray-200 dark:border-white/10 rounded-2xl p-1.5 shadow-2xl z-30 space-y-1 animate-in fade-in">
+                                                                                        <button
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setActiveTaskMenu(null);
+                                                                                                setSelectedAssignment(task);
+                                                                                            }}
+                                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-xl text-left"
+                                                                                        >
+                                                                                            <Edit2 className="w-3.5 h-3.5" /> View / Edit
+                                                                                        </button>
+                                                                                        {task.isDraft && (
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleQuickPublishTask(task._id);
+                                                                                                }}
+                                                                                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 rounded-xl text-left"
+                                                                                            >
+                                                                                                <Send className="w-3.5 h-3.5" /> Publish Now
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <button
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleQuickDeleteTask(task._id);
+                                                                                            }}
+                                                                                            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl text-left"
+                                                                                        >
+                                                                                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                         )}
                                                                     </div>
                                                                 </div>
-
-                                                                <div className="flex items-center gap-2 self-end sm:self-center">
-                                                                    {Array.isArray(task.attachments) && task.attachments.length > 0 && (
-                                                                        <span className="text-xs bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-lg text-gray-500 flex items-center gap-1" title={`${task.attachments.length} attachments`}>
-                                                                            <Paperclip className="w-3 h-3" /> {task.attachments.length}
-                                                                        </span>
-                                                                    )}
-                                                                    {task.taskType !== 'material' && (
-                                                                        <span className="text-xs font-bold px-3 py-1 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full">
-                                                                            {task.maxMarks || 100} pts
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                            );
+                                                        })
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -705,10 +1129,38 @@ const HomePage = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* TAB 6: ANALYTICS */}
+            {/* TAB 6: GOOGLE FORMS 1.0 */}
+            {activeTab === 'forms' && (
+                <div className="max-w-5xl mx-auto">
+                    <FormModule roomId={isPersonal ? 'personal' : roomId} user={user} roomDetails={roomDetails} />
+                </div>
+            )}
+
+            {/* TAB 7: RESOURCES / GOOGLE DRIVE-STYLE FILES */}
+            {activeTab === 'resources' && !isPersonal && (
+                <div className="max-w-5xl mx-auto">
+                    <ClassroomFilesTab roomId={roomId} isTeacher={isTeacher} user={user} />
+                </div>
+            )}
+
+            {/* TAB 8: ANALYTICS */}
             {activeTab === 'analytics' && (
                 <div className="max-w-5xl mx-auto">
                     <ClassroomAnalytics roomId={roomId} />
+                </div>
+            )}
+
+            {/* TAB 9: LIVE CLASSROOM & WHITEBOARD 2.0 */}
+            {activeTab === 'live' && !isPersonal && (
+                <div className="max-w-6xl mx-auto h-[750px]">
+                    <LiveClassroom roomId={roomId} user={user} isTeacher={isTeacher} />
+                </div>
+            )}
+
+            {/* TAB 10: AI ACADEMIC COPILOT & STUDY ASSISTANT */}
+            {activeTab === 'ai' && (
+                <div className="max-w-5xl mx-auto h-[750px]">
+                    <StudyAssistant roomId={roomId} user={user} />
                 </div>
             )}
 
@@ -721,6 +1173,8 @@ const HomePage = ({ user, onLogout }) => {
                 roomId={isPersonal ? 'personal' : roomId}
                 roomDetails={roomDetails}
                 existingTopics={allTopics}
+                initialTaskType={modalTaskType}
+                initialTopic={modalInitialTopic}
             />
 
             <AssignmentModal
@@ -739,6 +1193,120 @@ const HomePage = ({ user, onLogout }) => {
                 roomId={roomId}
                 onSettingsSaved={(updated) => setRoomDetails(updated)}
             />
+
+            {/* Create Topic Modal */}
+            <AnimatePresence>
+                {isCreateTopicOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            onClick={() => setIsCreateTopicOpen(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="w-full max-w-md bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl relative z-10 space-y-4"
+                        >
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                    <FolderPlus className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                    Add Topic Module
+                                </h3>
+                                <button onClick={() => setIsCreateTopicOpen(false)} className="text-gray-400 hover:text-white">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <form onSubmit={handleCreateTopic} className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Topic name (e.g. Unit 1: Foundations)"
+                                    value={newTopicName}
+                                    onChange={e => setNewTopicName(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-2xl text-xs font-semibold outline-none focus:border-purple-500 text-gray-900 dark:text-white"
+                                    autoFocus
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCreateTopicOpen(false)}
+                                        className="px-4 py-2 border border-gray-200 dark:border-white/10 text-xs font-bold rounded-xl text-gray-600 dark:text-gray-400"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={!newTopicName.trim()}
+                                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                                    >
+                                        Add Topic
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Rename Topic Modal */}
+            <AnimatePresence>
+                {isRenameTopicOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                            onClick={() => setIsRenameTopicOpen(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="w-full max-w-md bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl relative z-10 space-y-4"
+                        >
+                            <div className="flex justify-between items-center">
+                                <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                                    <Edit2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                    Rename Topic
+                                </h3>
+                                <button onClick={() => setIsRenameTopicOpen(false)} className="text-gray-400 hover:text-white">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <form onSubmit={handleRenameTopic} className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="New topic name"
+                                    value={renamingTopicNew}
+                                    onChange={e => setRenamingTopicNew(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/10 rounded-2xl text-xs font-semibold outline-none focus:border-purple-500 text-gray-900 dark:text-white"
+                                    autoFocus
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsRenameTopicOpen(false)}
+                                        className="px-4 py-2 border border-gray-200 dark:border-white/10 text-xs font-bold rounded-xl text-gray-600 dark:text-gray-400"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={!renamingTopicNew.trim()}
+                                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                                    >
+                                        Rename
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Floating Room Chat */}
             {!isPersonal && (

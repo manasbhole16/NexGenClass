@@ -4,9 +4,15 @@ const answerSchema = new mongoose.Schema({
     questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Question', required: true },
     selectedOption: { type: Number, default: null }, // Index for mcq / true_false
     selectedOptions: { type: [Number], default: [] }, // Array of indices for multiple_select
-    textAnswer: { type: String, trim: true, default: '' }, // For short_answer
+    textAnswer: { type: String, trim: true, default: '' }, // For short_answer, long_answer, fill_blank
     marksAwarded: { type: Number, default: 0 },
     feedback: { type: String, trim: true, default: '' }
+}, { _id: false });
+
+const suspiciousEventSchema = new mongoose.Schema({
+    eventType: { type: String, required: true }, // 'tab_switch', 'window_blur', 'fullscreen_exit', 'paste_attempt'
+    timestamp: { type: Date, default: Date.now },
+    details: { type: String, default: '' }
 }, { _id: false });
 
 const attemptSchema = new mongoose.Schema({
@@ -23,6 +29,7 @@ const attemptSchema = new mongoose.Schema({
         default: 'in_progress'
     },
     attemptNumber: { type: Number, default: 1 },
+    timeSpentSeconds: { type: Number, default: 0 },
     questionOrder: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
     flaggedQuestions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
     answers: [answerSchema],
@@ -31,7 +38,8 @@ const attemptSchema = new mongoose.Schema({
     subjectiveMarks: { type: Number, default: 0 },
     percentage: { type: Number, default: 0 },
     isEvaluated: { type: Boolean, default: false },
-    teacherFeedback: { type: String, trim: true, default: '' }
+    teacherFeedback: { type: String, trim: true, default: '' },
+    suspiciousEvents: [suspiciousEventSchema] // Safe Mode telemetry events
 }, { timestamps: true });
 
 attemptSchema.index({ quizId: 1, studentId: 1 });
