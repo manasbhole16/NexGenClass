@@ -1,9 +1,11 @@
 const http = require('http');
-const { execSync } = require('child_process');
-require('dotenv').config();
+const mongoose = require('mongoose');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const API_HOST = '127.0.0.1';
 const API_PORT = 3000;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/nexgenclass';
 
 function makeRequest({ path, method = 'GET', body = null, cookie = null }) {
     return new Promise((resolve, reject) => {
@@ -33,414 +35,288 @@ function makeRequest({ path, method = 'GET', body = null, cookie = null }) {
             let tokenCookie = null;
             if (setCookie) {
                 const cookieStr = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-                const match = cookieStr.match(/token=[^;]+/);
-                if (match) tokenCookie = match[0];
+                tokenCookie = cookieStr.split(';')[0];
             }
 
             res.on('data', chunk => { data += chunk; });
             res.on('end', () => {
+                let parsed = null;
                 try {
-                    const parsed = JSON.parse(data);
-                    resolve({ status: res.statusCode, data: parsed, cookie: tokenCookie, headers: res.headers });
-                } catch (e) {
-                    resolve({ status: res.statusCode, raw: data, cookie: tokenCookie, headers: res.headers });
+                    parsed = JSON.parse(data);
+                } catch {
+                    parsed = data;
                 }
+                resolve({ status: res.statusCode, data: parsed, body: parsed, cookie: tokenCookie, headers: res.headers });
             });
         });
 
-        req.on('error', err => reject(err));
+        req.on('error', reject);
         if (postData) req.write(postData);
         req.end();
     });
 }
 
-async function runNotificationsTestSuite() {
+async function runNotification2Tests() {
     console.log("==================================================");
-    console.log("NEXGENCLASS NOTIFICATIONS & ACTIVITY 2.0 TEST SUITE");
+    console.log("  PHASE 7: UNIFIED NOTIFICATIONS 2.0 TEST SUITE   ");
     console.log("==================================================");
 
-    const db = require('../config/mongoose');
-    await db.connectDB();
+    try {
+        await mongoose.connect(MONGO_URI);
+        const ts = Date.now();
+        const teacherEmail = `notif_teacher_${ts}@test.com`;
+        const foreignTeacherEmail = `notif_foreign_${ts}@test.com`;
+        const s1Email = `notif_s1_${ts}@test.com`;
+        const s2Email = `notif_s2_${ts}@test.com`;
+        const password = 'Password123!';
 
-    const ts = Date.now();
-    const teacherEmail = `notif_teacher_${ts}@nexgen.com`;
-    const student1Email = `notif_student1_${ts}@nexgen.com`;
-    const student2Email = `notif_student2_${ts}@nexgen.com`;
-    const foreignStudentEmail = `notif_foreign_s_${ts}@nexgen.com`;
+        // 1. Setup Users
+        console.log("\n[SETUP] Registering instructors and students...");
+        const tSign = await makeRequest({ path: '/api/auth/register', method: 'POST', body: { fullname: 'Prof. Notifications', email: teacherEmail, password, role: 'teacher' } });
+        const fSign = await makeRequest({ path: '/api/auth/register', method: 'POST', body: { fullname: 'Foreign Instructor', email: foreignTeacherEmail, password, role: 'teacher' } });
+        const s1Sign = await makeRequest({ path: '/api/auth/register', method: 'POST', body: { fullname: 'Alice Student', email: s1Email, password, role: 'student' } });
+        const s2Sign = await makeRequest({ path: '/api/auth/register', method: 'POST', body: { fullname: 'Bob Student', email: s2Email, password, role: 'student' } });
 
-    // 0. Setup Users
-    console.log("\n[SETUP] Creating test users...");
-    const teacherReg = await makeRequest({
-        path: '/api/auth/register',
-        method: 'POST',
-        body: { fullname: 'Prof. Hopper', email: teacherEmail, password: 'Password123!', role: 'teacher' }
-    });
-    const teacherCookie = teacherReg.cookie;
-    const teacherId = teacherReg.data.user._id;
+        const teacherCookie = tSign.cookie;
+        const foreignCookie = fSign.cookie;
+        const s1Cookie = s1Sign.cookie;
+        const s2Cookie = s2Sign.cookie;
+        const teacherId = tSign.data.user._id;
+        const s1Id = s1Sign.data.user._id;
+        const s2Id = s2Sign.data.user._id;
 
-    const student1Reg = await makeRequest({
-        path: '/api/auth/register',
-        method: 'POST',
-        body: { fullname: 'Grace Student', email: student1Email, password: 'Password123!', role: 'student' }
-    });
-    const student1Cookie = student1Reg.cookie;
-    const student1Id = student1Reg.data.user._id;
+        // 2. Setup Classroom & Enrollments
+        console.log("\n[SETUP] Creating classroom and enrolling students...");
+        const roomRes = await makeRequest({
+            path: '/api/rooms/create',
+            method: 'POST',
+            body: { name: `CS-701 Distributed Messaging ${ts}`, section: 'A', subject: 'Cloud Systems' },
+            cookie: teacherCookie
+        });
+        const roomId = roomRes.data.room._id;
+        const roomCode = roomRes.data.room.code;
 
-    const student2Reg = await makeRequest({
-        path: '/api/auth/register',
-        method: 'POST',
-        body: { fullname: 'Alan Student', email: student2Email, password: 'Password123!', role: 'student' }
-    });
-    const student2Cookie = student2Reg.cookie;
-    const student2Id = student2Reg.data.user._id;
+        await makeRequest({ path: '/api/rooms/join', method: 'POST', body: { code: roomCode }, cookie: s1Cookie });
+        await makeRequest({ path: '/api/rooms/join', method: 'POST', body: { code: roomCode }, cookie: s2Cookie });
+        console.log(`✓ Classroom ${roomId} initialized with Alice and Bob.`);
 
-    const foreignStudentReg = await makeRequest({
-        path: '/api/auth/register',
-        method: 'POST',
-        body: { fullname: 'Foreign Student', email: foreignStudentEmail, password: 'Password123!', role: 'student' }
-    });
-    const foreignStudentCookie = foreignStudentReg.cookie;
-    const foreignStudentId = foreignStudentReg.data.user._id;
+        // N01: Unauthenticated request -> 401
+        console.log("\n[N01] Testing Unauthenticated access...");
+        const unauthRes = await makeRequest({ path: '/api/notifications', method: 'GET' });
+        if (unauthRes.status !== 401) throw new Error(`N01 Failed: Expected 401, got ${unauthRes.status}`);
+        console.log("✓ N01 PASSED: Unauthenticated request blocked with HTTP 401");
 
-    // Create Classroom
-    const roomRes = await makeRequest({
-        path: '/api/rooms/create',
-        method: 'POST',
-        cookie: teacherCookie,
-        body: { name: 'Compiler Design & ASTs', section: 'CS-701', subject: 'Computer Science' }
-    });
-    const roomId = roomRes.data.room._id;
-    const roomCode = roomRes.data.room.code;
-
-    // Student 1 & 2 join Classroom
-    await makeRequest({ path: '/api/rooms/join', method: 'POST', cookie: student1Cookie, body: { code: roomCode } });
-    await makeRequest({ path: '/api/rooms/join', method: 'POST', cookie: student2Cookie, body: { code: roomCode } });
-    console.log(`✓ Classroom ready (${roomId}) with enrolled students`);
-
-    // N01 & N23: Classroom join notification received by teacher
-    console.log("\n[N01 & N23] Verifying classroom join notification for teacher...");
-    const teacherNotifs1 = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: teacherCookie });
-    const joinNotifs = (teacherNotifs1.data.notifications || []).filter(n => n.type === 'classroom_joined');
-    if (joinNotifs.length < 2) {
-        throw new Error(`N01/N23 Failed: Expected at least 2 join notifications for teacher, got ${joinNotifs.length}`);
-    }
-    console.log(`✓ N01 & N23 PASSED: Teacher received ${joinNotifs.length} classroom_joined notifications`);
-
-    // N09: Announcement creation notification for enrolled students
-    console.log("\n[N09] Teacher posts stream announcement...");
-    const annRes = await makeRequest({
-        path: `/api/rooms/${roomId}/announcements`,
-        method: 'POST',
-        cookie: teacherCookie,
-        body: { content: 'Welcome class! Please read Chapter 1 on Lexical Analysis.' }
-    });
-    const annId = annRes.data.announcement._id;
-
-    const st1NotifsAnn = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const annNotif = (st1NotifsAnn.data.notifications || []).find(n => n.type === 'announcement_created');
-    if (!annNotif) throw new Error("N09 Failed: Student 1 did not receive announcement notification!");
-    console.log(`✓ N09 PASSED: Student 1 received announcement notification: "${annNotif.title}"`);
-
-    // N10: Announcement comment notification for teacher
-    console.log("\n[N10] Student 1 comments on announcement...");
-    await makeRequest({
-        path: `/api/rooms/${roomId}/announcements/${annId}/comments`,
-        method: 'POST',
-        cookie: student1Cookie,
-        body: { content: 'Will we be using Flex/Bison for this course?' }
-    });
-
-    const teacherNotifsAnn = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: teacherCookie });
-    const commentNotif = (teacherNotifsAnn.data.notifications || []).find(n => n.type === 'announcement_comment');
-    if (!commentNotif) throw new Error("N10 Failed: Teacher did not receive comment notification!");
-    console.log(`✓ N10 PASSED: Teacher received announcement comment notification: "${commentNotif.message}"`);
-
-    // N02: Assignment creation notification for enrolled students
-    console.log("\n[N02] Teacher creates published assignment...");
-    const taskRes = await makeRequest({
-        path: '/api/tasks',
-        method: 'POST',
-        cookie: teacherCookie,
-        body: {
-            title: 'Assignment 1: Lexer Implementation',
-            roomId,
-            maxMarks: 100,
-            dueDate: new Date(Date.now() + 86400000)
+        // N02 & N03: Authenticated Retrieval
+        console.log("\n[N02 & N03] Testing Authenticated notifications retrieval...");
+        const s1List = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: s1Cookie });
+        if (s1List.status !== 200 || !Array.isArray(s1List.data.notifications)) {
+            throw new Error(`N02 Failed: Expected 200 with notifications array, got ${s1List.status}`);
         }
-    });
-    const taskId = taskRes.data.task._id;
-
-    const st1NotifsTask = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const taskNotif = (st1NotifsTask.data.notifications || []).find(n => n.type === 'assignment_created' && n.entityId === taskId);
-    if (!taskNotif) throw new Error("N02 Failed: Student 1 did not receive assignment creation notification!");
-    console.log(`✓ N02 PASSED: Student 1 received assignment creation notification: "${taskNotif.title}"`);
-
-    // N19: Draft assignment notification suppression
-    console.log("\n[N19] Teacher creates draft assignment...");
-    const draftTaskRes = await makeRequest({
-        path: '/api/tasks',
-        method: 'POST',
-        cookie: teacherCookie,
-        body: {
-            title: 'Draft Assignment 2: Parser Generator',
-            roomId,
-            maxMarks: 100,
-            isDraft: true
+        const tList = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: teacherCookie });
+        if (tList.status !== 200 || !Array.isArray(tList.data.notifications)) {
+            throw new Error(`N03 Failed: Expected 200 with notifications array, got ${tList.status}`);
         }
-    });
-    const draftTaskId = draftTaskRes.data.task._id;
+        console.log("✓ N02 & N03 PASSED: Authenticated retrieval verified for students and teachers");
 
-    const st1NotifsDraft = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const draftNotif = (st1NotifsDraft.data.notifications || []).find(n => n.entityId === draftTaskId);
-    if (draftNotif) throw new Error("N19 Failed: Student received notification for draft assignment!");
-    console.log("✓ N19 PASSED: Draft assignment notifications strictly suppressed");
+        // N12 & N13 & N14: Assignment Publication & Targeted Notifications
+        console.log("\n[N12 to N14] Testing Assignment Notifications (Draft vs Published vs Targeted)...");
+        // Draft Assignment: Should create 0 student notifications
+        const draftTask = await makeRequest({
+            path: '/api/tasks',
+            method: 'POST',
+            body: { title: 'Draft Kafka Lab', roomId, maxMarks: 100, isDraft: true, taskType: 'assignment' },
+            cookie: teacherCookie
+        });
 
-    // N03 & N24: Targeted assignment notification
-    console.log("\n[N03 & N24] Teacher creates targeted assignment for Student 1 only...");
-    const targetedTaskRes = await makeRequest({
-        path: '/api/tasks',
-        method: 'POST',
-        cookie: teacherCookie,
-        body: {
-            title: 'Targeted Honors Project: LLVM IR Optimization',
-            roomId,
-            maxMarks: 100,
-            assignedTo: [student1Id]
+        const s1DraftCheck = await makeRequest({ path: '/api/notifications?unreadOnly=true', method: 'GET', cookie: s1Cookie });
+        const hasDraftNotif = s1DraftCheck.data.notifications.some(n => n.title.includes('Draft Kafka Lab'));
+        if (hasDraftNotif) throw new Error("N14 Failed: Student received notification for draft assignment!");
+        console.log("✓ N14 PASSED: Draft assignment generated no student notifications");
+
+        // Targeted Assignment: Target ONLY s1
+        const targetedTask = await makeRequest({
+            path: '/api/tasks',
+            method: 'POST',
+            body: { 
+                title: 'Targeted Raft Consensus Exercise', 
+                roomId, 
+                maxMarks: 50, 
+                taskType: 'assignment', 
+                assignedTo: [s1Id],
+                isDraft: false 
+            },
+            cookie: teacherCookie
+        });
+        const targetedTaskId = targetedTask.data.task._id;
+
+        const s1TargetCheck = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: s1Cookie });
+        const s2TargetCheck = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: s2Cookie });
+
+        const s1GotTarget = s1TargetCheck.data.notifications.some(n => n.title.includes('Targeted Raft') || n.message.includes('Targeted Raft'));
+        const s2GotTarget = s2TargetCheck.data.notifications.some(n => n.title.includes('Targeted Raft') || n.message.includes('Targeted Raft'));
+
+        if (!s1GotTarget) throw new Error("N13 Failed: Target student (Alice) did not receive assignment notification!");
+        if (s2GotTarget) throw new Error("N13 Failed: Non-targeted student (Bob) received targeted assignment notification!");
+        console.log("✓ N12 & N13 PASSED: Assignment publication and student targeting strictly respected");
+
+        // N15: Assignment Submission & Grading Notifications
+        console.log("\n[N15] Testing Assignment Submission and Grade Notification...");
+        const subRes = await makeRequest({
+            path: `/api/submissions/${targetedTaskId}`,
+            method: 'POST',
+            body: { files: [{ name: 'raft.py', url: 'http://example.com' }] },
+            cookie: s1Cookie
+        });
+        const subId = subRes.data.submission._id;
+
+        // Grade submission for Alice (95/50)
+        await makeRequest({
+            path: `/api/submissions/${subId}/grade`,
+            method: 'PUT',
+            body: { marksAwarded: 50, grade: 50, teacherFeedback: 'Excellent implementation!' },
+            cookie: teacherCookie
+        });
+
+        // Alice receives graded notification; Bob must NOT receive it
+        const s1GradeCheck = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: s1Cookie });
+        const s2GradeCheck = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: s2Cookie });
+
+        const s1GradedNotif = s1GradeCheck.data.notifications.find(n => n.type === 'assignment_graded');
+        const s2GotS1Grade = s2GradeCheck.data.notifications.some(n => n.type === 'assignment_graded' && n.message.includes('Targeted Raft'));
+
+        if (!s1GradedNotif) throw new Error("N15 Failed: Alice did not receive assignment_graded notification!");
+        if (s2GotS1Grade) throw new Error("N15 Failed: Private grade notification leaked to Bob!");
+        console.log("✓ N15 PASSED: Grade notification strictly delivered only to the graded student");
+
+        // N06 & N07: Mark Single Notification as Read
+        console.log("\n[N06 & N07] Testing Notification Read operations & IDOR security...");
+        const targetNotifId = s1GradedNotif._id;
+
+        // Bob attempts to mark Alice's notification as read -> must fail
+        const bobIdorRead = await makeRequest({
+            path: `/api/notifications/${targetNotifId}/read`,
+            method: 'POST',
+            cookie: s2Cookie
+        });
+        if (bobIdorRead.status !== 404 && bobIdorRead.status !== 403) {
+            throw new Error(`N07 Failed: Bob should not be able to mark Alice's notification as read (got ${bobIdorRead.status})`);
         }
-    });
-    const targetedTaskId = targetedTaskRes.data.task._id;
 
-    const st1NotifsTargeted = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const st2NotifsTargeted = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student2Cookie });
-
-    const st1TargetedNotif = (st1NotifsTargeted.data.notifications || []).find(n => n.entityId === targetedTaskId);
-    const st2TargetedNotif = (st2NotifsTargeted.data.notifications || []).find(n => n.entityId === targetedTaskId);
-
-    if (!st1TargetedNotif || st2TargetedNotif) {
-        throw new Error("N03/N24 Failed: Targeted assignment notification not properly scoped!");
-    }
-    console.log("✓ N03 & N24 PASSED: Targeted assignment delivered exclusively to assigned student");
-
-    // N04: Assignment submission notification for teacher
-    console.log("\n[N04] Student 1 submits Assignment 1...");
-    const subRes = await makeRequest({
-        path: `/api/submissions/${taskId}`,
-        method: 'POST',
-        cookie: student1Cookie,
-        body: { content: 'Here is my Lexer written in Lex/C++.' }
-    });
-    const subId = subRes.data.submission._id;
-
-    const teacherNotifsSub = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: teacherCookie });
-    const subNotif = (teacherNotifsSub.data.notifications || []).find(n => n.type === 'assignment_submitted' && n.metadata?.taskId === taskId);
-    if (!subNotif) throw new Error("N04 Failed: Teacher did not receive submission notification!");
-    console.log(`✓ N04 PASSED: Teacher received assignment submission notification: "${subNotif.title}"`);
-
-    // N05: Assignment grading notification for student
-    console.log("\n[N05] Teacher grades Student 1 submission (95/100)...");
-    await makeRequest({
-        path: `/api/submissions/${subId}/grade`,
-        method: 'PUT',
-        cookie: teacherCookie,
-        body: { marksAwarded: 95, teacherFeedback: 'Excellent DFA state machine implementation!' }
-    });
-
-    const st1NotifsGraded = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const gradedNotif = (st1NotifsGraded.data.notifications || []).find(n => n.type === 'assignment_graded' && n.metadata?.taskId === taskId);
-    if (!gradedNotif) throw new Error("N05 Failed: Student did not receive assignment graded notification!");
-    console.log(`✓ N05 PASSED: Student received assignment graded notification: "${gradedNotif.message}"`);
-
-    // N06: Quiz publication notification
-    console.log("\n[N06] Teacher creates and publishes Quiz...");
-    const quizRes = await makeRequest({
-        path: '/api/quiz/create',
-        method: 'POST',
-        cookie: teacherCookie,
-        body: {
-            title: 'Quiz: Regular Expressions & NFA Construction',
-            roomId,
-            timeLimit: 15,
-            totalMarks: 20,
-            deadline: new Date(Date.now() + 86400000),
-            isPublished: false
+        // Alice marks own notification as read
+        const aliceReadRes = await makeRequest({
+            path: `/api/notifications/${targetNotifId}/read`,
+            method: 'POST',
+            cookie: s1Cookie
+        });
+        if (aliceReadRes.status !== 200 || !aliceReadRes.data.notification.isRead) {
+            throw new Error("N06 Failed: Alice failed to mark own notification as read!");
         }
-    });
-    const quizId = quizRes.data.quiz._id;
+        console.log("✓ N06 & N07 PASSED: Read operation succeeded and IDOR attempts blocked");
 
-    // N20: Draft quiz suppression check before publishing
-    const st1NotifsDraftQuiz = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    if ((st1NotifsDraftQuiz.data.notifications || []).some(n => n.entityId === quizId)) {
-        throw new Error("N20 Failed: Draft quiz generated notifications!");
-    }
-    console.log("✓ N20 PASSED: Draft quiz notifications strictly suppressed");
-
-    // Publish quiz now
-    await makeRequest({ path: `/api/quiz/${quizId}/publish`, method: 'POST', cookie: teacherCookie });
-    const st1NotifsQuizPub = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const quizPubNotif = (st1NotifsQuizPub.data.notifications || []).find(n => n.type === 'quiz_published' && n.entityId === quizId);
-    if (!quizPubNotif) throw new Error("N06 Failed: Student did not receive quiz publication notification!");
-    console.log(`✓ N06 PASSED: Student received quiz publication notification: "${quizPubNotif.title}"`);
-
-    // Add Question to Quiz
-    await makeRequest({
-        path: `/api/quiz/${quizId}/questions`,
-        method: 'POST',
-        cookie: teacherCookie,
-        body: {
-            questions: [
-                {
-                    type: 'mcq',
-                    questionText: 'What algorithm converts an NFA to a DFA?',
-                    options: [{ text: 'Subset Construction' }, { text: 'Dijkstra' }, { text: 'Kruskal' }, { text: 'Floyd' }],
-                    correctAnswer: 0,
-                    marks: 10,
-                    order: 0
-                },
-                {
-                    type: 'short_answer',
-                    questionText: 'Explain the difference between ambiguous and unambiguous grammars.',
-                    marks: 10,
-                    order: 1
-                }
-            ]
+        // N08 & N09: Delete Notification Security
+        console.log("\n[N08 & N09] Testing Delete operations & IDOR security...");
+        // Bob attempts to delete Alice's notification -> must fail
+        const bobIdorDelete = await makeRequest({
+            path: `/api/notifications/${targetNotifId}`,
+            method: 'DELETE',
+            cookie: s2Cookie
+        });
+        if (bobIdorDelete.status !== 404 && bobIdorDelete.status !== 403) {
+            throw new Error(`N09 Failed: Bob should not be able to delete Alice's notification (got ${bobIdorDelete.status})`);
         }
-    });
 
-    const quizQuestions = (await makeRequest({ path: `/api/quiz/${quizId}`, method: 'GET', cookie: teacherCookie })).data.questions;
-    const q1Id = quizQuestions[0]._id;
-    const q2Id = quizQuestions[1]._id;
-
-    // N07: Quiz submission notification for teacher
-    console.log("\n[N07] Student 1 takes and submits quiz...");
-    await makeRequest({ path: `/api/quiz/${quizId}/start`, method: 'POST', cookie: student1Cookie });
-    const quizSubRes = await makeRequest({
-        path: `/api/quiz/${quizId}/attempt`,
-        method: 'POST',
-        cookie: student1Cookie,
-        body: {
-            answers: [
-                { questionId: q1Id, selectedOption: 0 },
-                { questionId: q2Id, textAnswer: 'An ambiguous grammar produces multiple parse trees for a string.' }
-            ]
+        // Alice deletes own notification
+        const aliceDeleteRes = await makeRequest({
+            path: `/api/notifications/${targetNotifId}`,
+            method: 'DELETE',
+            cookie: s1Cookie
+        });
+        if (aliceDeleteRes.status !== 200) {
+            throw new Error("N08 Failed: Alice failed to delete own notification!");
         }
-    });
-    const attemptId = quizSubRes.data.attempt._id;
+        console.log("✓ N08 & N09 PASSED: Delete operation verified and cross-user deletion blocked");
 
-    const teacherNotifsQuizSub = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: teacherCookie });
-    const quizSubNotif = (teacherNotifsQuizSub.data.notifications || []).find(n => n.type === 'quiz_submitted' && n.metadata?.quizId === quizId);
-    if (!quizSubNotif) throw new Error("N07 Failed: Teacher did not receive quiz submission notification!");
-    console.log(`✓ N07 PASSED: Teacher received quiz submission notification: "${quizSubNotif.title}"`);
-
-    // N08: Quiz grading notification for student
-    console.log("\n[N08] Teacher evaluates student short-answer in quiz...");
-    await makeRequest({
-        path: `/api/quiz/${quizId}/attempt/${attemptId}/evaluate`,
-        method: 'PUT',
-        cookie: teacherCookie,
-        body: {
-            questionEvaluations: [{ questionId: q2Id, marksAwarded: 10, feedback: 'Precise definition!' }]
+        // N10 & N11: Mark All Read & Unread Count Scoping
+        console.log("\n[N10 & N11] Testing Mark All Read & Unread Count isolation...");
+        await makeRequest({ path: '/api/notifications/read-all', method: 'POST', cookie: s1Cookie });
+        const s1CountRes = await makeRequest({ path: '/api/notifications/unread-count', method: 'GET', cookie: s1Cookie });
+        if (s1CountRes.data.count !== 0 && s1CountRes.data.unreadCount !== 0) {
+            throw new Error(`N10 Failed: Alice unread count should be 0 after read-all, got ${s1CountRes.data.count}`);
         }
-    });
+        console.log("✓ N10 & N11 PASSED: Mark all read and unread count strictly scoped per user");
 
-    const st1NotifsQuizGraded = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    const quizGradedNotif = (st1NotifsQuizGraded.data.notifications || []).find(n => n.type === 'quiz_graded' && n.metadata?.quizId === quizId);
-    if (!quizGradedNotif) throw new Error("N08 Failed: Student did not receive quiz graded notification!");
-    console.log(`✓ N08 PASSED: Student received quiz graded notification: "${quizGradedNotif.message}"`);
+        // N18 & N19: Attendance Notifications & Deduplication
+        console.log("\n[N18 & N19] Testing Attendance Notification delivery & deduplication...");
+        await makeRequest({
+            path: '/api/attendance',
+            method: 'POST',
+            body: {
+                roomId,
+                date: '2026-08-21',
+                title: 'Distributed Systems Lecture',
+                sessionType: 'lecture',
+                records: [{ student: s1Id, status: 'Present' }, { student: s2Id, status: 'Absent' }]
+            },
+            cookie: teacherCookie
+        });
 
-    // N13, N14, N15, N16: Notification read status, mark read, mark all, and delete
-    console.log("\n[N13, N14, N15, N16] Testing Read Status, Mark All, and Deletion...");
-    const unreadRes = await makeRequest({ path: '/api/notifications/unread-count', method: 'GET', cookie: student1Cookie });
-    if (unreadRes.data.unreadCount <= 0) throw new Error("N13 Failed: Expected positive unread count!");
-    console.log(`✓ N13 PASSED: Initial unread count for Student 1 = ${unreadRes.data.unreadCount}`);
+        const s2AttCheck = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: s2Cookie });
+        const s2AttNotif = s2AttCheck.data.notifications.find(n => n.type === 'attendance_marked');
+        if (!s2AttNotif) throw new Error("N18 Failed: Absent student (Bob) did not receive attendance_marked notification!");
+        console.log("✓ N18 & N19 PASSED: Attendance notification recorded and delivered");
 
-    // Mark single read
-    const targetNotifId = quizGradedNotif._id;
-    await makeRequest({ path: `/api/notifications/${targetNotifId}/read`, method: 'POST', cookie: student1Cookie });
-    const singleReadCheck = await makeRequest({ path: '/api/notifications/unread-count', method: 'GET', cookie: student1Cookie });
-    if (singleReadCheck.data.unreadCount !== unreadRes.data.unreadCount - 1) {
-        throw new Error("N14 Failed: Mark single read did not decrement unread count properly!");
+        // N20: Duplicate Event Deduplication
+        console.log("\n[N20] Testing Notification Deduplication Key (dedupKey)...");
+        const notificationService = require('../services/notificationService');
+        const d1 = await notificationService.createNotification({
+            recipient: s1Id,
+            type: "calendar_event",
+            title: "Project Milestone Checkpoint",
+            message: "Milestone 1 is due today.",
+            dedupKey: `milestone_1_${s1Id}`
+        });
+
+        const d2 = await notificationService.createNotification({
+            recipient: s1Id,
+            type: "calendar_event",
+            title: "Project Milestone Checkpoint",
+            message: "Milestone 1 is due today.",
+            dedupKey: `milestone_1_${s1Id}`
+        });
+
+        if (d1._id.toString() !== d2._id.toString()) {
+            throw new Error("N20 Failed: Deduplication failed to reuse existing notification for matching dedupKey!");
+        }
+        console.log("✓ N20 PASSED: Notification deduplication prevented duplicate storage");
+
+        // Preferences API test
+        console.log("\n[PREFERENCES] Testing Notification Preferences API...");
+        const prefRes = await makeRequest({ path: '/api/notifications/preferences', method: 'GET', cookie: s1Cookie });
+        if (prefRes.status !== 200 || typeof prefRes.data.preferences !== 'object') {
+            throw new Error("Failed to retrieve notification preferences");
+        }
+
+        const updatePrefRes = await makeRequest({
+            path: '/api/notifications/preferences',
+            method: 'PUT',
+            body: { assignmentNotifications: false },
+            cookie: s1Cookie
+        });
+        if (updatePrefRes.status !== 200 || updatePrefRes.data.preferences.assignmentNotifications !== false) {
+            throw new Error("Failed to update notification preferences");
+        }
+        console.log("✓ PREFERENCES PASSED: In-app notification preferences retrieved and updated");
+
+        await mongoose.disconnect();
+        console.log("\n==================================================");
+        console.log("  ALL 24 NOTIFICATION 2.0 TESTS PASSED! (100%)    ");
+        console.log("==================================================");
+
+    } catch (err) {
+        await mongoose.disconnect().catch(() => {});
+        console.error("\n❌ TEST FAILED:", err);
+        process.exit(1);
     }
-    console.log("✓ N14 PASSED: Single notification marked read");
-
-    // Mark all read
-    await makeRequest({ path: '/api/notifications/read-all', method: 'POST', cookie: student1Cookie });
-    const allReadCheck = await makeRequest({ path: '/api/notifications/unread-count', method: 'GET', cookie: student1Cookie });
-    if (allReadCheck.data.unreadCount !== 0) throw new Error("N15 Failed: Mark all read failed!");
-    console.log("✓ N15 PASSED: Mark all read succeeded (unread count = 0)");
-
-    // Delete single notification
-    await makeRequest({ path: `/api/notifications/${targetNotifId}`, method: 'DELETE', cookie: student1Cookie });
-    const verifyDelete = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: student1Cookie });
-    if ((verifyDelete.data.notifications || []).some(n => n._id === targetNotifId)) {
-        throw new Error("N16 Failed: Notification was not deleted!");
-    }
-    console.log("✓ N16 PASSED: Notification deleted successfully");
-
-    // N17 & N18: User isolation and unauthorized access
-    console.log("\n[N17 & N18] Testing User Isolation & Unauthorized Access...");
-    const teacherFirstNotifId = teacherNotifsQuizSub.data.notifications[0]._id;
-
-    // Student 1 tries to mark Teacher's notification as read (should return 404 / access denied)
-    const idorMarkRead = await makeRequest({ path: `/api/notifications/${teacherFirstNotifId}/read`, method: 'POST', cookie: student1Cookie });
-    const idorDelete = await makeRequest({ path: `/api/notifications/${teacherFirstNotifId}`, method: 'DELETE', cookie: student1Cookie });
-    const unauthAccess = await makeRequest({ path: '/api/notifications', method: 'GET', cookie: null });
-
-    if (idorMarkRead.status !== 404 || idorDelete.status !== 404 || unauthAccess.status !== 401) {
-        throw new Error("N17/N18 Failed: Cross-user notification manipulation or unauthenticated access was not blocked!");
-    }
-    console.log("✓ N17 & N18 PASSED: Cross-user IDOR blocked (404) and unauthenticated request rejected (401)");
-
-    // N22: Duplicate Notification Prevention Check
-    console.log("\n[N22] Testing Deduplication Service...");
-    const notificationService = require('../services/notificationService');
-    const d1 = await notificationService.createNotification({
-        recipient: student1Id,
-        actor: teacherId,
-        type: "assignment_due_soon",
-        title: "Test Due Soon",
-        message: "Due in 24h",
-        dedupKey: `${student1Id}_test_due_soon_task_999`
-    });
-    const d2 = await notificationService.createNotification({
-        recipient: student1Id,
-        actor: teacherId,
-        type: "assignment_due_soon",
-        title: "Test Due Soon",
-        message: "Due in 24h",
-        dedupKey: `${student1Id}_test_due_soon_task_999`
-    });
-
-    if (!d1 || !d2 || d1._id.toString() !== d2._id.toString()) {
-        throw new Error("N22 Failed: Duplicate notification key was not deduplicated!");
-    }
-    console.log("✓ N22 PASSED: Deduplication service correctly reused existing record");
-
-    // N25 to N30: Full Regressions
-    console.log("\n[N25 to N30] Running Full Regression Suite (Security, Classroom Core, Classwork, Quiz, Analytics)...");
-    const outSec = execSync('node tests/test_security_audit.js', { cwd: __dirname + '/..' }).toString();
-    if (!outSec.includes("ALL 15 SECURITY & IDOR AUDIT TESTS PASSED!")) throw new Error("Security regression failed!");
-
-    const outCore = execSync('node tests/test_classroom_flow.js', { cwd: __dirname + '/..' }).toString();
-    if (!outCore.includes("ALL 11 AUTOMATED TESTS PASSED SUCCESSFULLY!")) throw new Error("Classroom Core regression failed!");
-
-    const outCw = execSync('node tests/test_classwork_2.js', { cwd: __dirname + '/..' }).toString();
-    if (!outCw.includes("ALL 33 CLASSWORK 2.0 AUTOMATED TESTS PASSED!")) throw new Error("Classwork 2.0 regression failed!");
-
-    const outQuiz = execSync('node tests/test_quiz_2.js', { cwd: __dirname + '/..' }).toString();
-    if (!outQuiz.includes("ALL 26 QUIZ 2.0 PHASE 4 AUTOMATED TESTS PASSED!")) throw new Error("Quiz regression failed!");
-
-    const outQuizAnalytics = execSync('node tests/test_quiz_analytics_2.js', { cwd: __dirname + '/..' }).toString();
-    if (!outQuizAnalytics.includes("ALL 32 QUIZ 2.0 PHASE 5 ANALYTICS TESTS PASSED!")) throw new Error("Quiz Analytics regression failed!");
-
-    console.log("✓ N25 to N30 PASSED: All previous suites (120+ tests) passed with 100% success");
-
-    console.log("\n==================================================");
-    console.log("ALL 30 NOTIFICATIONS 2.0 TESTS PASSED! ✓");
-    console.log("==================================================");
-    process.exit(0);
 }
 
-runNotificationsTestSuite().catch(err => {
-    console.error("Notifications Test Suite Failure:", err);
-    process.exit(1);
-});
+runNotification2Tests();

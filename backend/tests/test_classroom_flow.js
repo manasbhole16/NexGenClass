@@ -16,7 +16,17 @@ async function runTests() {
     console.log("STARTING NEXGENCLASS CORE CLASSROOM TEST SUITE");
     console.log("==================================================");
 
-    await mongoose.connect(MONGO_URI);
+    let connected = false;
+    for (let i = 0; i < 3; i++) {
+        try {
+            await mongoose.connect(MONGO_URI, { family: 4, serverSelectionTimeoutMS: 5000 });
+            connected = true;
+            break;
+        } catch (e) {
+            if (i === 2) throw e;
+            await new Promise(r => setTimeout(r, 1000));
+        }
+    }
     console.log("✓ Connected to MongoDB");
 
     // Clean up or find test users
