@@ -28,6 +28,7 @@ import ClassGradesTab from '../components/classroom/ClassGradesTab';
 import ClassSettingsModal from '../components/classroom/ClassSettingsModal';
 import NotificationCenter from '../components/notifications/NotificationCenter';
 import ClassroomFilesTab from '../components/files/ClassroomFilesTab';
+import StudyAssistant from '../components/ai/StudyAssistant';
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -671,6 +672,18 @@ const HomePage = ({ user, onLogout }) => {
                             >
                                 <BarChart2 className="w-4 h-4" /> Analytics
                             </button>
+
+                            <button
+                                onClick={() => setActiveTab('ai')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'ai'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-purple-600/70 dark:text-purple-400/70 hover:text-purple-600 dark:hover:text-purple-300'
+                                }`}
+                            >
+                                <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-pulse" />
+                                {isTeacher ? 'Teaching Copilot' : 'AI Assistant'}
+                            </button>
                         </>
                     )}
                 </div>
@@ -1122,6 +1135,13 @@ const HomePage = ({ user, onLogout }) => {
             {activeTab === 'analytics' && (
                 <div className="max-w-5xl mx-auto">
                     <ClassroomAnalytics roomId={roomId} />
+                </div>
+            )}
+
+            {/* TAB 9: AI ACADEMIC COPILOT & STUDY ASSISTANT */}
+            {activeTab === 'ai' && (
+                <div className="max-w-5xl mx-auto h-[750px]">
+                    <StudyAssistant roomId={roomId} user={user} />
                 </div>
             )}
 

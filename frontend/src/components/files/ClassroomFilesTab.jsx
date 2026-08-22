@@ -32,6 +32,7 @@ import {
 import API_BASE_URL from '../../apiConfig';
 import FilePreviewModal from './FilePreviewModal';
 import FileDetailsPanel from './FileDetailsPanel';
+import DocumentSummaryPanel from '../ai/DocumentSummaryPanel';
 import { io } from 'socket.io-client';
 
 const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
@@ -47,6 +48,7 @@ const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
     // Modals
     const [previewFile, setPreviewFile] = useState(null);
     const [selectedDetailsFile, setSelectedDetailsFile] = useState(null);
+    const [summaryModalFile, setSummaryModalFile] = useState(null);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [showLinkModal, setShowLinkModal] = useState(false);
     const [editingFile, setEditingFile] = useState(null);
@@ -390,6 +392,13 @@ const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
                                     </div>
                                     <div className="flex items-center gap-1">
                                         <button
+                                            onClick={() => setSummaryModalFile(file)}
+                                            className="p-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-600 dark:text-purple-400 transition-colors"
+                                            title="AI Summarize"
+                                        >
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
                                             onClick={() => setSelectedDetailsFile(file)}
                                             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
                                             title="Details"
@@ -483,6 +492,13 @@ const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
 
                             <div className="flex items-center gap-2 self-end sm:self-center">
                                 <button
+                                    onClick={() => setSummaryModalFile(file)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-xs font-bold text-purple-600 dark:text-purple-400 transition-colors flex items-center gap-1"
+                                    title="AI Summarize"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5" /> Summarize
+                                </button>
+                                <button
                                     onClick={() => setPreviewFile(file)}
                                     className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors"
                                 >
@@ -536,6 +552,15 @@ const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
                     file={previewFile}
                     isOpen={!!previewFile}
                     onClose={() => setPreviewFile(null)}
+                />
+            )}
+
+            {/* AI SUMMARY PANEL */}
+            {summaryModalFile && (
+                <DocumentSummaryPanel
+                    file={summaryModalFile}
+                    isOpen={!!summaryModalFile}
+                    onClose={() => setSummaryModalFile(null)}
                 />
             )}
 

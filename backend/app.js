@@ -20,6 +20,7 @@ const liveSessionRoutes = require("./routes/liveSessionRouter");
 const formRoutes = require("./routes/formRouter");
 const calendarRoutes = require("./routes/calendarRouter");
 const fileRoutes = require("./routes/fileRouter");
+const aiRoutes = require("./routes/aiRouter");
 const ChatMessage = require("./models/chatMessage-model");
 const { startTaskReminderJob } = require("./jobs/taskReminderJob");
 
@@ -91,6 +92,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/live-sessions", liveSessionRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/files", fileRoutes);
+app.use("/api/ai", aiRoutes);
 
 // Socket Connection Handler
 const usersInRooms = {}; // { roomId: [ { userId, fullname, socketId } ] }

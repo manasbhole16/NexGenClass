@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../apiConfig';
 import ResourcePickerModal from './files/ResourcePickerModal';
+import RubricGeneratorModal from './ai/RubricGeneratorModal';
 
 const NewTaskModal = ({
     isOpen,
@@ -56,6 +57,7 @@ const NewTaskModal = ({
     const [linkInput, setLinkInput] = useState({ title: '', url: '' });
     const [showLinkInput, setShowLinkInput] = useState(false);
     const [showResourcePicker, setShowResourcePicker] = useState(false);
+    const [showRubricGenerator, setShowRubricGenerator] = useState(false);
 
     // Audience: Empty array means all students, otherwise array of student IDs
     const [assignTarget, setAssignTarget] = useState('all'); // 'all' | 'custom'
@@ -624,13 +626,22 @@ const NewTaskModal = ({
                                                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                                     Grading Rubric ({totalRubricScore} pts)
                                                 </label>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAddRubric}
-                                                    className="px-3 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold flex items-center gap-1"
-                                                >
-                                                    <Plus className="w-3.5 h-3.5" /> Add Criterion
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowRubricGenerator(true)}
+                                                        className="px-3 py-1 bg-pink-500/10 text-pink-600 dark:text-pink-400 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-pink-500/20 transition-colors"
+                                                    >
+                                                        <Sparkles className="w-3.5 h-3.5" /> AI Generate
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAddRubric}
+                                                        className="px-3 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-lg text-xs font-bold flex items-center gap-1"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5" /> Add Criterion
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             {rubric.map((r, i) => (
@@ -869,6 +880,16 @@ const NewTaskModal = ({
                     onClose={() => setShowResourcePicker(false)}
                     roomId={roomId}
                     onSelectResource={(res) => setAttachments(prev => [...prev, res])}
+                />
+            )}
+
+            {showRubricGenerator && (
+                <RubricGeneratorModal
+                    isOpen={showRubricGenerator}
+                    onClose={() => setShowRubricGenerator(false)}
+                    assignmentTitle={formData.title}
+                    maxMarks={formData.maxMarks}
+                    onAddRubric={(newRubric) => setRubric(newRubric)}
                 />
             )}
         </AnimatePresence>
