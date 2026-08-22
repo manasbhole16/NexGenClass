@@ -30,6 +30,8 @@ NexGenClass is a production-grade, full-stack educational and academic managemen
     - Deterministic similarity engine (token, n-gram, phrase overlap), side-by-side evidence viewer, CSV formula injection defense, and instructor reviews.
 12. **Phase 12 — Platform QA, Performance & Security Hardening 2.0**
     - Complete cross-module regression test suite, IDOR defenses, database index optimizations, and production build readiness.
+13. **Phase 13 — Mobile App / React Native 2.0**
+    - Cross-platform native mobile client built with React Native, TypeScript, React Navigation, Secure Storage, and Socket.IO. Supports student & teacher role-based dashboards, classroom stream, assignment submissions, rubric grading, AI study assistant, planner agenda, and push notification ready.
 
 ---
 
@@ -74,7 +76,19 @@ npm install
 npm run dev
 ```
 
-### 4. Running Production Build
+### 4. Mobile Client Setup (React Native)
+```bash
+cd mobile
+npm install
+# Configure API_BASE_URL in src/constants/config.ts or .env
+npm start
+# To run on Android:
+npm run android
+# To run on iOS:
+npm run ios
+```
+
+### 5. Running Production Build
 ```bash
 cd frontend
 npm run build
@@ -87,6 +101,9 @@ npm run build
 Run the automated test suites from the root directory:
 
 ```bash
+# Phase 13: React Native Mobile Integration
+node backend/tests/test_mobile_app_13.js
+
 # Phase 12: Platform QA & Security
 node backend/tests/test_phase12_qa.js
 
