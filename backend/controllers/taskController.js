@@ -1,6 +1,7 @@
 const Task = require("../models/task-model");
 const Room = require("../models/room-model");
 const Submission = require("../models/submission-model");
+const File = require("../models/file-model");
 const notificationService = require("../services/notificationService");
 const { sendMail } = require("../utils/mailer");
 const { isAiConfigured } = require("../utils/aiClient");

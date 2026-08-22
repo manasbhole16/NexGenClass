@@ -27,6 +27,7 @@ import ClassPeopleTab from '../components/classroom/ClassPeopleTab';
 import ClassGradesTab from '../components/classroom/ClassGradesTab';
 import ClassSettingsModal from '../components/classroom/ClassSettingsModal';
 import NotificationCenter from '../components/notifications/NotificationCenter';
+import ClassroomFilesTab from '../components/files/ClassroomFilesTab';
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -650,6 +651,17 @@ const HomePage = ({ user, onLogout }) => {
                             </button>
 
                             <button
+                                onClick={() => setActiveTab('resources')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'resources'
+                                        ? 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Folder className="w-4 h-4" /> Resources
+                            </button>
+
+                            <button
                                 onClick={() => setActiveTab('analytics')}
                                 className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
                                     activeTab === 'analytics'
@@ -1099,7 +1111,14 @@ const HomePage = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* TAB 7: ANALYTICS */}
+            {/* TAB 7: RESOURCES / GOOGLE DRIVE-STYLE FILES */}
+            {activeTab === 'resources' && !isPersonal && (
+                <div className="max-w-5xl mx-auto">
+                    <ClassroomFilesTab roomId={roomId} isTeacher={isTeacher} user={user} />
+                </div>
+            )}
+
+            {/* TAB 8: ANALYTICS */}
             {activeTab === 'analytics' && (
                 <div className="max-w-5xl mx-auto">
                     <ClassroomAnalytics roomId={roomId} />

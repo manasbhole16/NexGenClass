@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Calendar, Clock, Tag, Loader, Sparkles, Plus, Trash2, Paperclip,
     Link as LinkIcon, BookOpen, Layers, Users, FileText, CheckCircle,
-    Eye, EyeOff, HelpCircle, ExternalLink, Github, HardDrive
+    Eye, EyeOff, HelpCircle, ExternalLink, Github, HardDrive, FolderPlus
 } from 'lucide-react';
 import API_BASE_URL from '../apiConfig';
+import ResourcePickerModal from './files/ResourcePickerModal';
 
 const NewTaskModal = ({
     isOpen,
@@ -54,6 +55,7 @@ const NewTaskModal = ({
     const [attachments, setAttachments] = useState([]);
     const [linkInput, setLinkInput] = useState({ title: '', url: '' });
     const [showLinkInput, setShowLinkInput] = useState(false);
+    const [showResourcePicker, setShowResourcePicker] = useState(false);
 
     // Audience: Empty array means all students, otherwise array of student IDs
     const [assignTarget, setAssignTarget] = useState('all'); // 'all' | 'custom'
@@ -525,6 +527,15 @@ const NewTaskModal = ({
                                                 >
                                                     <Plus className="w-3.5 h-3.5" /> Upload Files
                                                 </label>
+                                                {isClassroom && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowResourcePicker(true)}
+                                                        className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                                                    >
+                                                        <FolderPlus className="w-3.5 h-3.5" /> From Resources
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
                                                     onClick={() => setShowLinkInput(!showLinkInput)}
@@ -850,6 +861,15 @@ const NewTaskModal = ({
 
                     </motion.div>
                 </div>
+            )}
+
+            {showResourcePicker && (
+                <ResourcePickerModal
+                    isOpen={showResourcePicker}
+                    onClose={() => setShowResourcePicker(false)}
+                    roomId={roomId}
+                    onSelectResource={(res) => setAttachments(prev => [...prev, res])}
+                />
             )}
         </AnimatePresence>
     );

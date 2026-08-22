@@ -1,6 +1,8 @@
 const Submission = require("../models/submission-model");
 const Task = require("../models/task-model");
 const Room = require("../models/room-model");
+const File = require("../models/file-model");
+const fileStorageService = require("../services/fileStorageService");
 const notificationService = require("../services/notificationService");
 
 // Submit / Turn In / Unsubmit Assignment
@@ -131,17 +133,56 @@ module.exports.uploadFile = async (req, res) => {
         const isLate = task.dueDate && new Date() > new Date(task.dueDate);
         const status = isLate ? 'late' : 'submitted';
 
-        // Convert all uploaded buffers to Base64 Data URIs
-        const newAttachments = files.map(file => {
-            const base64Data = file.buffer.toString('base64');
-            const fileUrl = `data:${file.mimetype};base64,${base64Data}`;
-            return {
-                fileUrl,
-                fileName: file.originalname,
-                fileType: file.mimetype,
-                uploadedAt: new Date()
-            };
-        });
+        // Process uploaded files with storage service and File model
+        const newAttachments = [];
+        for (const file of files) {
+            try {
+                const stored = await fileStorageService.uploadFile({
+                    buffer: file.buffer,
+                    originalname: file.originalname,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    subfolder: task.room ? `room_${task.room}` : "submissions"
+                });
+
+                const fileDoc = await File.create({
+                    originalName: stored.originalName,
+                    storedName: stored.storedName,
+                    mimeType: stored.mimeType,
+                    extension: stored.extension,
+                    size: stored.size,
+                    storageProvider: stored.storageProvider,
+                    storageKey: stored.storageKey,
+                    url: stored.url,
+                    uploadedBy: studentId,
+                    roomId: task.room || roomId,
+                    visibility: "private",
+                    category: stored.category,
+                    entityType: "submission_attachment",
+                    entityId: taskId,
+                    referenceCount: 1
+                });
+
+                newAttachments.push({
+                    fileUrl: stored.url,
+                    fileName: stored.originalName,
+                    fileType: stored.mimeType,
+                    fileId: fileDoc._id,
+                    uploadedAt: new Date()
+                });
+            } catch (storageErr) {
+                console.error("Storage error for submission file:", storageErr);
+                // Fallback to base64 data URI for resilience
+                const base64Data = file.buffer.toString('base64');
+                const fileUrl = `data:${file.mimetype};base64,${base64Data}`;
+                newAttachments.push({
+                    fileUrl,
+                    fileName: file.originalname,
+                    fileType: file.mimetype,
+                    uploadedAt: new Date()
+                });
+            }
+        }
 
         // Find existing submission to append attachments if needed
         let existing = await Submission.findOne({ taskId, studentId });
