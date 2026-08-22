@@ -1,98 +1,136 @@
-# NexGenClass
+# NexGenClass — Unified Academic Platform 2.0
 
-> "Just as antigravity counteracts downward force, this module is designed to counteract the 'downward pull' of academic failure. By analyzing attendance dips and quiz patterns in real-time, the system 'lifts' at-risk students back to safety by alerting teachers before the student fails, essentially defying the gravity of traditional academic dropout rates."
+NexGenClass is a production-grade, full-stack educational and academic management platform built to bridge the gap between teachers and students through real-time collaboration, interactive assessments, AI academic assistance, attendance intelligence, live virtual classrooms, document management, and academic integrity verification.
 
-NexGenClass is a modern, full-stack educational platform built to bridge the gap between teachers and students through real-time analytics, interactive quizzes, and dynamic task management. The project is designed with a futuristic, glassmorphism aesthetic, ensuring an engaging user experience.
+---
 
-## ✨ Key Features
+## 🚀 Completed Phases Overview
 
-- **Role-Based Access Control**: Separate dashboards and functionalities for Teachers and Students.
-- **Interactive Quizzes**:
-  - Teachers can create, manage, and assign quizzes.
-  - Students can take quizzes with real-time timers.
-  - Automated evaluation and grade calculations.
-- **Student Analytics Dashboard**:
-  - Global and classroom-level insights.
-  - Visualized data for quiz performances and attendance trends.
-  - Early-warning system to identify at-risk students.
-- **Kanban Task Manager**:
-  - Futuristic neon aesthetic drag-and-drop boards.
-  - Real-time task status updates (To Do, In Progress, Done).
-- **Real-Time Communication**: Multi-tab sync and real-time alerts powered by Socket.io.
+1. **Phase 1 — Google Classroom Core UI & Realtime Stream**
+   - Classroom navigation, Stream announcements, People roster, Grades, Teacher/Student RBAC, and Socket.IO synchronization.
+2. **Phase 2 — Classwork / Assignments 2.0**
+   - Topics, assignments, multi-file attachments, rubric evaluation, draft/publish workflows, and late-submission tracking.
+3. **Phase 3 — Quiz & Assessment 2.0**
+   - Question bank, MCQ/short-answer questions, automated/manual grading, timed attempts, and score analytics.
+4. **Phase 4 — Attendance Intelligence 2.0**
+   - Session marking (lecture/lab), student personal attendance dashboard, classroom attendance matrix, and threshold early warning alerts.
+5. **Phase 5 — Unified Academic Planner 2.0**
+   - Personal Kanban task management, cross-module academic agenda aggregation, and calendar deadlines.
+6. **Phase 6 — Analytics 2.0**
+   - Academic performance insights, grade distribution histograms, student mastery charts, and CSV exports.
+7. **Phase 7 — Unified Notifications 2.0**
+   - Real-time in-app notification center, user preferences, deduplication keys, and private recipient dispatch.
+8. **Phase 8 — File & Document Management 2.0**
+   - Canonical file repository, path traversal protection, dangerous extension blocking, streaming downloads, and resource reuse.
+9. **Phase 9 — AI Academic Copilot 2.0**
+   - Document summarization, contextual Q&A, study guide/plan generation, active exam anti-cheating deflection, and instructor rubric drafting.
+10. **Phase 10 — Live Virtual Classrooms & Collaborative Whiteboard 2.0**
+    - WebRTC signaling, screen sharing, classroom chat, vector whiteboard canvas, and automatic attendance generation.
+11. **Phase 11 — Plagiarism Detection & Academic Integrity 2.0**
+    - Deterministic similarity engine (token, n-gram, phrase overlap), side-by-side evidence viewer, CSV formula injection defense, and instructor reviews.
+12. **Phase 12 — Platform QA, Performance & Security Hardening 2.0**
+    - Complete cross-module regression test suite, IDOR defenses, database index optimizations, and production build readiness.
+
+---
 
 ## 🛠 Tech Stack
 
 ### Frontend
 - **Framework**: React 19, Vite
-- **Styling**: Tailwind CSS (v4), Framer Motion, Glassmorphism UI
-- **Routing**: React Router DOM
-- **Data Visualization**: Chart.js, React-Chartjs-2
-- **Drag-and-Drop**: @dnd-kit/core, @dnd-kit/sortable
-- **Real-time**: Socket.io-client
+- **Styling**: Tailwind CSS v4, Framer Motion, Glassmorphism UI
+- **Icons & Visuals**: Lucide React, Chart.js, React-Chartjs-2
+- **Drag-and-Drop**: `@dnd-kit/core`, `@dnd-kit/sortable`
+- **Real-time & Live**: Socket.IO Client, WebSockets, HTML5 Canvas WebRTC
 
 ### Backend
 - **Environment**: Node.js, Express.js
-- **Database**: MongoDB, Mongoose
-- **Authentication**: JWT (JSON Web Tokens), bcrypt
-- **Real-time**: Socket.io
-- **Utilities**: Multer (file uploads), Nodemailer (emails), Node-cron (scheduled tasks)
+- **Database**: MongoDB, Mongoose ORM
+- **Authentication**: JWT (JSON Web Tokens), Cookie-Parser, bcryptjs
+- **Real-time**: Socket.IO Server
+- **File Management & Text Extraction**: Multer, Stream-based I/O, Document text parsers
+- **Security & Integrity**: In-memory LRU caching, CSV sanitizer, Rate limiters
 
-## 📂 Project Structure
+---
 
-```text
-NexGenClass/
-├── frontend/          # React + Vite application
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── assets/
-│   │   ├── App.jsx
-│   │   └── index.css
-│   └── package.json
-└── backend/           # Node.js + Express backend
-    ├── controllers/
-    ├── models/
-    ├── routes/
-    ├── middleware/
-    ├── services/
-    ├── app.js
-    ├── server.js
-    └── package.json
-```
+## 🏃 Getting Started
 
-## 🚀 Getting Started
+### 1. Prerequisites
+- Node.js (v18+ recommended)
+- MongoDB running locally or MongoDB Atlas URI
 
-### Prerequisites
-- Node.js (v18+)
-- MongoDB (Local or Atlas)
-
-### 1. Clone the repository
-```bash
-git clone <repository-url>
-cd NexGenClass
-```
-
-### 2. Setup the Backend
+### 2. Backend Setup
 ```bash
 cd backend
 npm install
-```
-- Create a `.env` file in the `backend` directory with your environment variables (e.g., `PORT`, `MONGODB_URI`, `JWT_SECRET`).
-- Start the backend server:
-```bash
+cp ../.env.example .env
+# Configure MONGO_URI, JWT_SECRET, and PORT in .env
 npm start
 ```
 
-### 3. Setup the Frontend
+### 3. Frontend Setup
 ```bash
-cd ../frontend
+cd frontend
 npm install
-```
-- Start the development server:
-```bash
 npm run dev
 ```
 
-## 📝 License
+### 4. Running Production Build
+```bash
+cd frontend
+npm run build
+```
 
-This project is licensed under the ISC License.
+---
+
+## 🧪 Automated Test Suites
+
+Run the automated test suites from the root directory:
+
+```bash
+# Phase 12: Platform QA & Security
+node backend/tests/test_phase12_qa.js
+
+# Phase 11: Plagiarism Detection 2.0
+node backend/tests/test_plagiarism_2.js
+
+# Phase 10: Live Virtual Classroom & Whiteboard 2.0
+node backend/tests/test_live_class_2.js
+
+# Phase 9: AI Academic Copilot 2.0
+node backend/tests/test_ai_2.js
+
+# Phase 8: File & Document Management 2.0
+node backend/tests/test_files_2.js
+
+# Phase 7: Unified Notifications 2.0
+node backend/tests/test_notifications_2.js
+
+# Phase 6: Analytics 2.0
+node backend/tests/test_analytics_2.js
+
+# Phase 5: Unified Academic Planner 2.0
+node backend/tests/test_planner_2.js
+
+# Phase 4: Attendance 2.0
+node backend/tests/test_attendance_2.js
+
+# Phase 3: Quiz 2.0
+node backend/tests/test_quiz_2.js
+
+# Phase 2: Classwork 2.0 Regression
+node backend/tests/test_classwork_2.js
+
+# Phase 1: Core Classroom Flow
+node backend/tests/test_classroom_flow.js
+```
+
+---
+
+## 🔒 Security & Privacy Guarantees
+
+- **Authentication & JWT**: Strictly enforced with HTTP-only cookies and automatic expiration checks.
+- **Server-Side RBAC**: Every single resource creation, modification, or grading operation is verified server-side.
+- **Strict IDOR Defenses**: Users cannot read, tamper with, or delete submissions, attempts, files, notifications, or AI conversations belonging to others.
+- **File Upload Protection**: Path traversal sanitized via `path.basename()`; dangerous binaries blocked.
+- **Formula Injection Defense**: All exported spreadsheets sanitize leading `=`, `+`, `-`, or `@` trigger characters.
+- **Academic Integrity Safety**: Active exam answer requests are deflected; student identities are masked in peer plagiarism reports.

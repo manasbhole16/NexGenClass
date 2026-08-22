@@ -21,6 +21,7 @@ exports.markAttendance = async (req, res) => {
         const { 
             roomId, 
             date, 
+            sessionDate,
             title = 'Class Session', 
             sessionType = 'lecture', 
             startTime = '', 
@@ -30,7 +31,8 @@ exports.markAttendance = async (req, res) => {
             sessionId
         } = req.body;
         
-        if (!roomId || !date) {
+        const effectiveDate = date || sessionDate;
+        if (!roomId || !effectiveDate) {
             return res.status(400).json({ success: false, message: "roomId and date are required." });
         }
 

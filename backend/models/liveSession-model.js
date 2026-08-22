@@ -24,8 +24,7 @@ const liveSessionSchema = new mongoose.Schema(
         roomId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Room",
-            required: true,
-            index: true
+            required: true
         },
         hostId: {
             type: mongoose.Schema.Types.ObjectId,

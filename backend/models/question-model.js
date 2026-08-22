@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
 const questionSchema = new mongoose.Schema({
-    quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', default: null, index: true },
-    roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', default: null, index: true },
+    quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', default: null },
+    roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     type: {
         type: String,

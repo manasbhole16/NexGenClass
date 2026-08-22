@@ -20,11 +20,12 @@ module.exports.createTask = async (req, res) => {
             return res.status(400).json({ message: "Title is required" });
         }
 
-        const isPersonal = !roomId || roomId === 'personal';
+        const targetRoomId = roomId || req.body.room;
+        const isPersonal = !targetRoomId || targetRoomId === 'personal';
 
         // Server-Side RBAC Check for Classroom Tasks
         if (!isPersonal) {
-            const room = await Room.findById(roomId);
+            const room = await Room.findById(targetRoomId);
             if (!room) {
                 return res.status(404).json({ message: "Classroom not found" });
             }
@@ -48,7 +49,7 @@ module.exports.createTask = async (req, res) => {
             dueDate: dueDate ? new Date(dueDate) : null,
             status: status || 'Todo',
             order: order || 0,
-            room: isPersonal ? null : roomId,
+            room: isPersonal ? null : targetRoomId,
             owner: req.user._id,
             subtasks: Array.isArray(subtasks)
                 ? subtasks
