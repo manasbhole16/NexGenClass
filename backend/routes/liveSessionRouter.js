@@ -1,24 +1,31 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const upload = multer({ limits: { fileSize: 100 * 1024 * 1024 } }); // 100MB for video recording chunks
 const { protect } = require("../middleware/authMiddleware");
-const {
-    createLiveSession,
-    startLiveSession,
-    endLiveSession,
-    joinLiveSession,
-    leaveLiveSession,
-    getCurrentLiveSession,
-    getLiveSessionHistory
-} = require("../controllers/liveSessionController");
+const liveSessionController = require("../controllers/liveSessionController");
 
 router.use(protect);
 
-router.post("/rooms/:roomId", createLiveSession);
-router.get("/rooms/:roomId/current", getCurrentLiveSession);
-router.get("/rooms/:roomId/history", getLiveSessionHistory);
-router.post("/:sessionId/start", startLiveSession);
-router.post("/:sessionId/end", endLiveSession);
-router.post("/:sessionId/join", joinLiveSession);
-router.post("/:sessionId/leave", leaveLiveSession);
+// Session Lifecycle
+router.post("/", liveSessionController.createLiveSession);
+router.post("/rooms/:roomId", liveSessionController.createLiveSession);
+router.get("/rooms/:roomId/current", liveSessionController.getCurrentLiveSession);
+router.get("/rooms/:roomId/history", liveSessionController.getLiveSessionHistory);
+
+router.get("/:sessionId", liveSessionController.getLiveSessionById);
+router.post("/:sessionId/start", liveSessionController.startLiveSession);
+router.post("/:sessionId/end", liveSessionController.endLiveSession);
+router.post("/:sessionId/join", liveSessionController.joinLiveSession);
+router.post("/:sessionId/leave", liveSessionController.leaveLiveSession);
+
+// Moderation & Whiteboard Permissions
+router.post("/:sessionId/kick/:userId", liveSessionController.kickParticipant);
+router.post("/:sessionId/whiteboard-permission", liveSessionController.toggleWhiteboardPermission);
+router.post("/:sessionId/whiteboard", liveSessionController.saveWhiteboardState);
+
+// Live Attendance & Recordings
+router.get("/:sessionId/attendance", liveSessionController.getLiveAttendance);
+router.post("/:sessionId/recording", upload.any(), liveSessionController.attachRecording);
 
 module.exports = router;

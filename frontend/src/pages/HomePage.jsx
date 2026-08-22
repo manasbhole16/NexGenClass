@@ -29,6 +29,7 @@ import ClassSettingsModal from '../components/classroom/ClassSettingsModal';
 import NotificationCenter from '../components/notifications/NotificationCenter';
 import ClassroomFilesTab from '../components/files/ClassroomFilesTab';
 import StudyAssistant from '../components/ai/StudyAssistant';
+import LiveClassroom from '../components/live/LiveClassroom';
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -674,6 +675,17 @@ const HomePage = ({ user, onLogout }) => {
                             </button>
 
                             <button
+                                onClick={() => setActiveTab('live')}
+                                className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+                                    activeTab === 'live'
+                                        ? 'border-red-600 text-red-600 dark:border-red-400 dark:text-red-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                                }`}
+                            >
+                                <Video className="w-4 h-4" /> Live Class
+                            </button>
+
+                            <button
                                 onClick={() => setActiveTab('ai')}
                                 className={`pb-2.5 px-3 text-xs sm:text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
                                     activeTab === 'ai'
@@ -1138,7 +1150,14 @@ const HomePage = ({ user, onLogout }) => {
                 </div>
             )}
 
-            {/* TAB 9: AI ACADEMIC COPILOT & STUDY ASSISTANT */}
+            {/* TAB 9: LIVE CLASSROOM & WHITEBOARD 2.0 */}
+            {activeTab === 'live' && !isPersonal && (
+                <div className="max-w-6xl mx-auto h-[750px]">
+                    <LiveClassroom roomId={roomId} user={user} isTeacher={isTeacher} />
+                </div>
+            )}
+
+            {/* TAB 10: AI ACADEMIC COPILOT & STUDY ASSISTANT */}
             {activeTab === 'ai' && (
                 <div className="max-w-5xl mx-auto h-[750px]">
                     <StudyAssistant roomId={roomId} user={user} />

@@ -176,6 +176,97 @@ io.on("connection", (socket) => {
             console.error("Chat error:", err);
         }
     });
+
+    // ============================================================
+    // PHASE 10: LIVE VIRTUAL CLASSROOM & WEBRTC SIGNALING
+    // ============================================================
+    socket.on("live:join", ({ sessionId, user }) => {
+        if (!sessionId || !user) return;
+        const liveRoom = `live_session_${sessionId}`;
+        socket.join(liveRoom);
+        socket.to(liveRoom).emit("live:peer-joined", {
+            userId: user._id,
+            fullname: user.fullname,
+            role: user.role,
+            socketId: socket.id
+        });
+        console.log(`User ${user.fullname} joined live session ${sessionId}`);
+    });
+
+    socket.on("live:leave", ({ sessionId, user }) => {
+        if (!sessionId || !user) return;
+        const liveRoom = `live_session_${sessionId}`;
+        socket.leave(liveRoom);
+        socket.to(liveRoom).emit("live:peer-left", {
+            userId: user._id,
+            fullname: user.fullname
+        });
+    });
+
+    // WebRTC Signaling
+    socket.on("webrtc:offer", ({ sessionId, targetUserId, offer, senderId, senderName }) => {
+        io.to(`user_${targetUserId}`).emit("webrtc:offer", {
+            sessionId,
+            offer,
+            senderId,
+            senderName
+        });
+    });
+
+    socket.on("webrtc:answer", ({ sessionId, targetUserId, answer, senderId }) => {
+        io.to(`user_${targetUserId}`).emit("webrtc:answer", {
+            sessionId,
+            answer,
+            senderId
+        });
+    });
+
+    socket.on("webrtc:ice-candidate", ({ sessionId, targetUserId, candidate, senderId }) => {
+        io.to(`user_${targetUserId}`).emit("webrtc:ice-candidate", {
+            sessionId,
+            candidate,
+            senderId
+        });
+    });
+
+    // In-class Live Chat
+    socket.on("live:chat-message", ({ sessionId, message }) => {
+        if (!sessionId || !message) return;
+        io.to(`live_session_${sessionId}`).emit("live:chat-message", message);
+    });
+
+    // Hand Raising
+    socket.on("live:hand-raised", ({ sessionId, user }) => {
+        if (!sessionId || !user) return;
+        io.to(`live_session_${sessionId}`).emit("live:hand-raised", { user });
+    });
+
+    socket.on("live:hand-lowered", ({ sessionId, user }) => {
+        if (!sessionId || !user) return;
+        io.to(`live_session_${sessionId}`).emit("live:hand-lowered", { user });
+    });
+
+    // Screen Sharing
+    socket.on("live:screen-share-started", ({ sessionId, user }) => {
+        if (!sessionId || !user) return;
+        socket.to(`live_session_${sessionId}`).emit("live:screen-share-started", { user });
+    });
+
+    socket.on("live:screen-share-stopped", ({ sessionId, user }) => {
+        if (!sessionId || !user) return;
+        socket.to(`live_session_${sessionId}`).emit("live:screen-share-stopped", { user });
+    });
+
+    // Collaborative Whiteboard
+    socket.on("live:whiteboard-operation", ({ sessionId, operation }) => {
+        if (!sessionId || !operation) return;
+        socket.to(`live_session_${sessionId}`).emit("live:whiteboard-operation", operation);
+    });
+
+    socket.on("live:whiteboard-clear", ({ sessionId }) => {
+        if (!sessionId) return;
+        socket.to(`live_session_${sessionId}`).emit("live:whiteboard-clear");
+    });
 });
 
 const PORT = process.env.PORT || 3001;

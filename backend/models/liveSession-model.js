@@ -65,6 +65,42 @@ const liveSessionSchema = new mongoose.Schema(
         participants: {
             type: [participantSchema],
             default: []
+        },
+        whiteboardEnabled: {
+            type: Boolean,
+            default: true
+        },
+        studentsCanDraw: {
+            type: Boolean,
+            default: true
+        },
+        whiteboardState: {
+            type: Array,
+            default: []
+        },
+        recordingFileId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "File",
+            default: null
+        },
+        recordingStatus: {
+            type: String,
+            enum: ["none", "recording", "completed", "failed"],
+            default: "none"
+        },
+        recordingMetadata: {
+            duration: { type: Number, default: 0 },
+            mimeType: { type: String, default: "video/webm" },
+            size: { type: Number, default: 0 }
+        },
+        attendanceGenerated: {
+            type: Boolean,
+            default: false
+        },
+        attendanceSessionId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Attendance",
+            default: null
         }
     },
     { timestamps: true }

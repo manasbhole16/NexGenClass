@@ -73,6 +73,7 @@ const fileSchema = new mongoose.Schema(
                 "quiz_attachment",
                 "form_attachment",
                 "profile_asset",
+                "live_recording",
                 "general"
             ],
             default: "classroom_resource"
