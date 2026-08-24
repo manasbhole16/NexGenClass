@@ -110,6 +110,15 @@ app.use((req, res, next) => {
 });
 
 // Safe Health Check Endpoint
+app.get("/", (req, res) => {
+    res.status(200).json({
+        status: "online",
+        message: "NexGenClass API is live and operational",
+        health: "/api/health",
+        version: "2.0.0"
+    });
+});
+
 app.get("/api/health", (req, res) => {
     const isDbConnected = db.isConnected ? db.isConnected() : true;
     res.status(200).json({
