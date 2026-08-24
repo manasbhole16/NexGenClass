@@ -19,7 +19,8 @@ const connectDB = async () => {
 
         const opts = {
             bufferCommands: false,
-            serverSelectionTimeoutMS: 5000, // Fail fast if no connection
+            serverSelectionTimeoutMS: 8000,
+            dbName: 'nexgenclass',
         };
 
         cached.promise = mongoose.connect(mongoUri, opts).then((mongoose) => {
