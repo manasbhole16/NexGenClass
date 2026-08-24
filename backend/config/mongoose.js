@@ -7,6 +7,9 @@ if (!cached) {
 }
 
 const connectDB = async () => {
+    if (mongoose.connection.readyState === 1) {
+        return mongoose;
+    }
     if (cached.conn) {
         return cached.conn;
     }

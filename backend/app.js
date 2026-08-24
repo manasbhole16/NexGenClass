@@ -68,7 +68,11 @@ app.use(async (req, res, next) => {
         next();
     } catch (error) {
         console.error("Database connection failed before request:", error.message || error);
-        res.status(503).json({ error: "Database connection failed. Please try again later." });
+        res.status(503).json({
+            error: "Database connection failed.",
+            details: error.message || "Unknown database error",
+            hasMongoUri: Boolean(process.env.MONGO_URI)
+        });
     }
 });
 
