@@ -487,9 +487,9 @@ const WelcomePage = () => {
             Bring teaching, learning and collaboration together with NextGenClass. Join thousands of educators and students today.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/signup">
+            <Link to="/login">
               <button className="w-full sm:w-auto px-8 py-4 rounded-full bg-[#6D28D9] text-white font-semibold hover:bg-[#5b21b6] transition-all hover:shadow-lg hover:shadow-[#6D28D9]/25 hover:-translate-y-1">
-                Get Started
+                Sign In
               </button>
             </Link>
             <Link to="/login">
