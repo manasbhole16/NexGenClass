@@ -1,14 +1,17 @@
 import React, { useState } from 'react'
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Mail, Lock, ArrowRight, Loader } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Mail, Lock, Loader, GraduationCap, Eye, EyeOff } from 'lucide-react'
 import API_BASE_URL from '../apiConfig'
+import authImage from '../assets/auth_illustration.jpg'
 
 const LoginPage = ({ onLogin }) => {
     const [formData, setFormData] = useState({ email: '', password: '' })
     const [role, setRole] = useState('student')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
     const navigate = useNavigate()
 
     const handleSubmit = async (e) => {
@@ -29,7 +32,7 @@ const LoginPage = ({ onLogin }) => {
             } else {
                 setError(data.message || data || 'Login failed')
             }
-        } catch (err) {
+        } catch (err) { // eslint-disable-line no-unused-vars
             setError('Server connection failed.')
         } finally {
             setLoading(false)
@@ -37,90 +40,199 @@ const LoginPage = ({ onLogin }) => {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-purple-600/20 blur-[120px]" />
-                <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-cyan-600/10 blur-[100px]" />
+        <div className="min-h-screen bg-[#F8FAFC] flex font-sans selection:bg-[#EDE9FE] selection:text-[#6D28D9]">
+            
+            {/* LEFT COLUMN: Illustration & Brand Message */}
+            <div className="hidden lg:flex w-[45%] xl:w-[50%] bg-[#F5F3FF] flex-col relative overflow-hidden">
+                {/* Background Blobs */}
+                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-[#EDE9FE] blur-[100px] opacity-70"></div>
+                
+                {/* Logo Area */}
+                <div className="p-8 relative z-10">
+                    <Link to="/" className="flex items-center gap-2 group w-fit">
+                        <div className="w-10 h-10 rounded-xl bg-[#6D28D9] flex items-center justify-center shadow-md shadow-[#6D28D9]/20 transition-all duration-300">
+                            <GraduationCap className="w-6 h-6 text-white" />
+                        </div>
+                        <span className="text-2xl font-bold tracking-tight text-[#111827]">
+                            NextGen<span className="text-[#6D28D9]">Class</span>
+                        </span>
+                    </Link>
+                </div>
+
+                {/* Text Content */}
+                <div className="px-12 pt-8 pb-4 relative z-10 max-w-xl">
+                    <motion.h1 
+                        key={`login-${role}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-4xl font-bold text-[#111827] mb-4 leading-tight"
+                    >
+                        {role === 'student' 
+                            ? "Welcome back to your classroom" 
+                            : "Welcome back, educator"}
+                    </motion.h1>
+                    <motion.p 
+                        key={`login-desc-${role}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="text-lg text-[#64748B]"
+                    >
+                        {role === 'student'
+                            ? "Sign in to access your classes, view upcoming tasks, and continue learning."
+                            : "Sign in to manage your students, review assignments, and access your tools."}
+                    </motion.p>
+                </div>
+
+                {/* Illustration */}
+                <div className="flex-1 relative flex items-end justify-center p-8 z-10">
+                    <motion.img 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.8 }}
+                        src={authImage} 
+                        alt="Academic learning illustration" 
+                        className="w-full max-w-md object-contain drop-shadow-2xl rounded-2xl mix-blend-multiply"
+                    />
+                </div>
             </div>
 
-            <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="w-full max-w-md bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 p-6 md:p-8 rounded-3xl shadow-xl dark:shadow-2xl relative"
-            >
-                <Link to="/" className="absolute top-4 left-4 md:top-6 md:left-6 p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors group">
-                    <ArrowLeft className="w-5 h-5 text-gray-500 group-hover:text-gray-900 dark:group-hover:text-white transition-colors" />
+            {/* RIGHT COLUMN: Auth Form */}
+            <div className="flex-1 flex flex-col justify-center items-center p-6 sm:p-12 relative">
+                {/* Mobile Logo & Back Button */}
+                <div className="w-full max-w-[460px] flex justify-between items-center mb-8 lg:hidden">
+                    <Link to="/" className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:bg-[#F5F3FF] hover:border-[#EDE9FE] hover:text-[#6D28D9] transition-all">
+                        <ArrowLeft className="w-5 h-5 text-gray-500" />
+                    </Link>
+                    <Link to="/" className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#6D28D9] flex items-center justify-center">
+                            <GraduationCap className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-xl font-bold tracking-tight text-[#111827]">
+                            NextGen<span className="text-[#6D28D9]">Class</span>
+                        </span>
+                    </Link>
+                </div>
+
+                {/* Desktop Back Button */}
+                <Link to="/" className="hidden lg:flex absolute top-8 left-8 w-10 h-10 rounded-full bg-white border border-gray-200 items-center justify-center hover:bg-[#F5F3FF] hover:border-[#EDE9FE] hover:text-[#6D28D9] text-gray-500 transition-all z-10 shadow-sm">
+                    <ArrowLeft className="w-5 h-5" />
                 </Link>
-                <div className="text-center mb-6 md:mb-8 mt-6 md:mt-0">
-                    <h2 className={`text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${role === 'student' ? 'from-purple-400 to-pink-400' : 'from-cyan-400 to-blue-400'}`}>
-                        {role === 'student' ? 'Student Login' : 'Teacher Portal'}
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">Enter your classroom dashboard</p>
-                </div>
 
-                {/* Role Tabs */}
-                <div className="flex bg-gray-100 dark:bg-black/40 p-1 rounded-xl mb-6">
-                    <button
-                        type="button"
-                        onClick={() => setRole('student')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${role === 'student' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-                    >
-                        Student
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setRole('teacher')}
-                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${role === 'teacher' ? 'bg-cyan-600 text-white shadow-lg' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-                    >
-                        Teacher
-                    </button>
-                </div>
-
-                {error && <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm italic">{error}</div>}
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-2">Email Address</label>
-                        <div className="relative">
-                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                            <input
-                                type="email"
-                                required
-                                className={`w-full bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl px-12 py-3.5 focus:outline-none focus:border-${role === 'student' ? 'purple' : 'cyan'}-500 text-gray-900 dark:text-white transition-colors`}
-                                placeholder="name@example.com"
-                                value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-2">Password</label>
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                            <input
-                                type="password"
-                                required
-                                className={`w-full bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl px-12 py-3.5 focus:outline-none focus:border-${role === 'student' ? 'purple' : 'cyan'}-500 text-gray-900 dark:text-white transition-colors`}
-                                placeholder="••••••••"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            />
-                        </div>
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="w-full max-w-[460px] bg-white rounded-[24px] shadow-sm shadow-gray-200/50 border border-gray-100 p-8 sm:p-10"
+                >
+                    <div className="text-center mb-8">
+                        <h2 className="text-[28px] font-bold text-[#111827] mb-2 tracking-tight">Welcome back</h2>
+                        <p className="text-[#64748B]">Sign in to continue to NextGenClass.</p>
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className={`w-full py-4 bg-gradient-to-r ${role === 'student' ? 'from-purple-600 to-pink-600 hover:shadow-[0_0_20px_rgba(147,51,234,0.3)]' : 'from-cyan-600 to-blue-600 hover:shadow-[0_0_20px_rgba(8,145,178,0.3)]'} rounded-xl font-bold transition-all flex items-center justify-center gap-2 group disabled:opacity-50`}
-                    >
-                        {loading ? <Loader className="w-5 h-5 animate-spin" /> : <>Sign In <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
-                    </button>
-                </form>
+                    {/* Role Toggle */}
+                    <div className="flex bg-[#F8FAFC] p-1.5 rounded-xl mb-8 border border-gray-100">
+                        <button
+                            type="button"
+                            onClick={() => setRole('student')}
+                            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                                role === 'student' 
+                                ? 'bg-[#6D28D9] text-white shadow-sm' 
+                                : 'text-[#64748B] hover:text-[#111827] hover:bg-gray-100'
+                            }`}
+                        >
+                            Student
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setRole('teacher')}
+                            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                                role === 'teacher' 
+                                ? 'bg-[#6D28D9] text-white shadow-sm' 
+                                : 'text-[#64748B] hover:text-[#111827] hover:bg-gray-100'
+                            }`}
+                        >
+                            Teacher
+                        </button>
+                    </div>
 
-                <p className="mt-8 text-center text-gray-600 dark:text-gray-400 text-sm">
-                    New here? <Link to="/signup" className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors underline font-medium">Create a {role === 'student' ? 'Student' : 'Teacher'} Account</Link>
-                </p>
-            </motion.div>
+                    {error && (
+                        <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 flex flex-col">
+                            <span className="text-[#DC2626] text-sm font-medium">{error}</span>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Email */}
+                        <div>
+                            <label className="block text-[13px] font-semibold text-[#111827] mb-2 uppercase tracking-wide">Email</label>
+                            <div className="relative group">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#6D28D9] transition-colors" />
+                                <input
+                                    type="email"
+                                    required
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-11 py-3.5 focus:border-[#6D28D9] focus:ring-4 focus:ring-[#EDE9FE] outline-none text-[#111827] transition-all placeholder:text-gray-400"
+                                    placeholder="you@example.com"
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Password */}
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="block text-[13px] font-semibold text-[#111827] uppercase tracking-wide">Password</label>
+                                <a href="#" className="text-sm font-medium text-[#6D28D9] hover:underline">Forgot password?</a>
+                            </div>
+                            <div className="relative group">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#6D28D9] transition-colors" />
+                                <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    required
+                                    className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-12 py-3.5 focus:border-[#6D28D9] focus:ring-4 focus:ring-[#EDE9FE] outline-none text-[#111827] transition-all placeholder:text-gray-400"
+                                    placeholder="••••••••"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full h-[52px] bg-[#6D28D9] text-white rounded-xl font-bold transition-all hover:bg-[#5b21b6] hover:shadow-md hover:-translate-y-0.5 flex items-center justify-center gap-2 mt-6 disabled:opacity-70 disabled:hover:translate-y-0"
+                        >
+                            {loading ? (
+                                <span className="flex items-center gap-2">
+                                    <Loader className="w-5 h-5 animate-spin" /> Signing in...
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    Sign In <ArrowRight className="w-5 h-5" />
+                                </span>
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="mt-8 text-center">
+                        <p className="text-[15px] text-[#64748B]">
+                            Don't have an account?{' '}
+                            <Link to="/signup" className="text-[#6D28D9] font-bold hover:underline">
+                                Create account
+                            </Link>
+                        </p>
+                    </div>
+                </motion.div>
+            </div>
         </div>
     )
 }

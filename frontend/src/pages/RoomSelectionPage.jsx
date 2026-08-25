@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import {
-    Plus, Users, ArrowRight, BookOpen, Loader, LogOut, Lock, MoreVertical,
-    FileText, Bell, Award, UserCircle2, GraduationCap, Folder, CheckSquare, Sparkles
+    Plus, Users, BookOpen, Loader, LogOut, MoreVertical,
+    FileText, Bell, Award, GraduationCap, Folder, CheckSquare, 
+    Search, Clock, CheckCircle2, ChevronRight, MessageSquare, ClipboardCheck
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import API_BASE_URL from '../apiConfig';
 import StudentGlobalAnalytics from '../components/analytics/StudentGlobalAnalytics';
 import CreateClassModal from '../components/classroom/CreateClassModal';
@@ -12,9 +14,11 @@ import EditClassModal from '../components/classroom/EditClassModal';
 import DashboardWorkArea from '../components/classroom/DashboardWorkArea';
 import NotificationCenter from '../components/notifications/NotificationCenter';
 import { getBannerGradient } from '../utils/themeUtils';
+import classBanner from '../assets/class_banner.jpg';
 
 const RoomSelectionPage = ({ user, onLogout }) => {
     const [rooms, setRooms] = useState([]);
+    const [tasks, setTasks] = useState([]); // For global tasks
     const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingRoom, setEditingRoom] = useState(null);
@@ -34,6 +38,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
 
     useEffect(() => {
         fetchRooms();
+        fetchGlobalTasks();
 
         // Check if join code was passed in URL
         const urlCode = searchParams.get('code');
@@ -62,6 +67,18 @@ const RoomSelectionPage = ({ user, onLogout }) => {
             console.error("Failed to load classrooms", err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function fetchGlobalTasks() {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/tasks?roomId=all`, { credentials: 'include' })
+            const data = await res.json()
+            if (data.success) {
+                setTasks(data.tasks)
+            }
+        } catch (err) {
+            console.error(err)
         }
     }
 
@@ -133,311 +150,350 @@ const RoomSelectionPage = ({ user, onLogout }) => {
         }
     };
 
+    // Calculate task completion percentage
+    const completedTasksCount = tasks.filter(t => t.completed).length;
+    const totalTasksCount = tasks.length;
+    const completionPercentage = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+    
+    // Sort upcoming tasks (uncompleted, closest due date first)
+    const upcomingTasks = tasks
+        .filter(t => !t.completed && t.dueDate)
+        .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+        .slice(0, 4);
+
     return (
-        <div className="min-h-screen p-4 md:p-8 selection:bg-purple-500/30 transition-colors duration-300">
-            {/* Top Dashboard Header */}
-            <header className="flex justify-between items-center mb-8 border-b border-gray-200 dark:border-white/5 pb-4">
-                <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-400">
-                        NexGenClass
-                    </h1>
-                </div>
-
-                <div className="flex items-center gap-4">
-                    {/* Plus / Add Class Action */}
-                    {isTeacher ? (
-                        <div className="relative">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setPlusMenuOpen(!plusMenuOpen); }}
-                                className="p-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-all shadow-md active:scale-95 flex items-center justify-center"
-                                title="Add class"
-                            >
-                                <Plus className="w-5 h-5" />
-                            </button>
-                            {plusMenuOpen && (
-                                <div
-                                    className="absolute right-0 top-12 w-44 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden animate-in fade-in duration-100"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    <button
-                                        onClick={() => { setIsJoinModalOpen(true); setPlusMenuOpen(false); }}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
-                                    >
-                                        Join class
-                                    </button>
-                                    <button
-                                        onClick={() => { setIsCreateModalOpen(true); setPlusMenuOpen(false); }}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium border-t border-gray-100 dark:border-white/5"
-                                    >
-                                        Create class
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <button
-                            onClick={() => setIsJoinModalOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold shadow-md transition-all active:scale-95"
-                        >
-                            <Plus className="w-4 h-4" /> Join Class
-                        </button>
-                    )}
-
-                    {/* Notification Center */}
-                    <NotificationCenter user={user} />
-
-                    {/* Profile Avatar */}
-                    <div className="relative">
-                        <div
-                            className="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-white shadow-md cursor-pointer hover:scale-105 transition-transform"
-                            onClick={(e) => { e.stopPropagation(); setShowProfileInfo(!showProfileInfo); }}
-                        >
-                            {user?.fullname?.[0]?.toUpperCase() || 'U'}
-                        </div>
-
-                        {showProfileInfo && (
-                            <div
-                                className="absolute top-12 right-0 w-72 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-2xl z-50 space-y-4 animate-in fade-in duration-100"
-                                onClick={e => e.stopPropagation()}
-                            >
-                                <div className="flex items-center gap-3 border-b border-gray-100 dark:border-white/5 pb-3">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-cyan-500 flex items-center justify-center font-bold text-xl text-white shadow-inner">
-                                        {user?.fullname?.[0]?.toUpperCase() || 'U'}
-                                    </div>
-                                    <div className="overflow-hidden">
-                                        <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{user?.fullname}</p>
-                                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                                        <span className="inline-block mt-1 px-2 py-0.5 text-[10px] uppercase font-extrabold rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                                            {user?.role}
-                                        </span>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={onLogout}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-xl text-sm font-semibold transition-colors"
-                                >
-                                    <LogOut className="w-4 h-4" /> Sign Out
-                                </button>
-                            </div>
-                        )}
+        <div className="min-h-screen bg-[#F8FAFC] dark:bg-[#0a0a0c] text-[#111827] dark:text-white font-sans flex flex-col lg:flex-row transition-colors duration-300">
+            
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0">
+                {/* Header Section */}
+                <header className="px-6 py-6 md:px-10 lg:pt-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 relative z-20">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight mb-1 text-[#111827] dark:text-white">
+                            Welcome back, {user?.fullname?.split(' ')[0] || 'Student'} 👋
+                        </h1>
+                        <p className="text-[#64748B] dark:text-gray-400">Ready to learn something amazing today?</p>
                     </div>
-                </div>
-            </header>
 
-            {/* Student Analytics Tab Toggle if Student */}
-            {!isTeacher && (
-                <div className="flex items-center gap-6 mb-6 border-b border-gray-200 dark:border-white/5 px-2">
-                    <button
-                        onClick={() => setActiveTab('classes')}
-                        className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${
-                            activeTab === 'classes'
-                                ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        My Classes
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('analytics')}
-                        className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${
-                            activeTab === 'analytics'
-                                ? 'border-purple-600 text-purple-600 dark:text-purple-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                    >
-                        Global Performance
-                    </button>
-                </div>
-            )}
-
-            {/* Main Area */}
-            {activeTab === 'classes' || isTeacher ? (
-                <>
-                    {/* Recently Due / Work Area */}
-                    <DashboardWorkArea user={user} />
-
-                    {/* Classes Grid */}
-                    {loading ? (
-                        <div className="flex items-center justify-center py-24 text-gray-500">
-                            <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full mr-3" />
-                            Loading classes...
+                    <div className="flex flex-col sm:flex-row w-full sm:w-auto items-stretch sm:items-center gap-4">
+                        {/* Search Bar */}
+                        <div className="relative w-full sm:w-[280px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Search for classes..." 
+                                className="w-full bg-white dark:bg-[#1f2937] border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#6D28D9] focus:ring-2 focus:ring-[#EDE9FE] dark:focus:ring-[#6D28D9]/20 transition-all text-[#111827] dark:text-white placeholder:text-gray-400"
+                            />
                         </div>
-                    ) : rooms.length === 0 ? (
-                        <div className="max-w-md mx-auto text-center py-20 px-6 bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm space-y-4">
-                            <div className="w-16 h-16 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto">
-                                <GraduationCap className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                                {isTeacher ? "Create your first class" : "You haven't joined any classes yet"}
-                            </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {isTeacher
-                                    ? "Start by creating a new classroom to post assignments, announcements, and track student grades."
-                                    : "Ask your teacher for a class code to join a classroom and access classwork."}
-                            </p>
-                            <div className="pt-2">
-                                {isTeacher ? (
-                                    <button
-                                        onClick={() => setIsCreateModalOpen(true)}
-                                        className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
+                        
+                        <div className="flex items-center gap-3">
+                            {/* Notification Center */}
+                            <NotificationCenter user={user} />
+
+                            {/* Join/Create Class Button */}
+                            {isTeacher ? (
+                                <div className="relative group">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); setPlusMenuOpen(!plusMenuOpen); }}
+                                        className="h-10 px-4 bg-[#6D28D9] text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#5b21b6] hover:shadow-md transition-all"
                                     >
-                                        + Create Class
+                                        <Plus className="w-4 h-4" /> Manage
                                     </button>
-                                ) : (
-                                    <button
-                                        onClick={() => setIsJoinModalOpen(true)}
-                                        className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
-                                    >
-                                        + Join Class
-                                    </button>
+                                    {plusMenuOpen && (
+                                        <div className="absolute right-0 top-12 w-40 z-50 animate-in fade-in duration-100">
+                                            <div className="bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg flex flex-col overflow-hidden py-1">
+                                                <button onClick={() => { setIsJoinModalOpen(true); setPlusMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F5F3FF] dark:hover:bg-gray-800 transition-colors font-medium">Join class</button>
+                                                <button onClick={() => { setIsCreateModalOpen(true); setPlusMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F5F3FF] dark:hover:bg-gray-800 transition-colors font-medium">Create class</button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <button onClick={() => setIsJoinModalOpen(true)} className="h-10 px-4 bg-[#6D28D9] text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#5b21b6] hover:shadow-md transition-all">
+                                    <Plus className="w-4 h-4" /> Join Class
+                                </button>
+                            )}
+
+                            {/* Profile Dropdown */}
+                            <div className="relative">
+                                <button 
+                                    className="w-10 h-10 rounded-full bg-[#EDE9FE] dark:bg-[#6D28D9]/20 text-[#6D28D9] dark:text-[#8B5CF6] flex items-center justify-center font-bold text-lg border border-transparent hover:border-[#6D28D9]/30 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setShowProfileInfo(!showProfileInfo); }}
+                                >
+                                    {user?.fullname?.[0] || 'U'}
+                                </button>
+
+                                {showProfileInfo && (
+                                    <div className="absolute top-12 right-0 w-64 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-2xl p-2 shadow-xl z-50 flex flex-col">
+                                        <div className="flex items-center gap-3 p-3 mb-1 bg-[#F8FAFC] dark:bg-gray-800/50 rounded-xl">
+                                            <div className="w-10 h-10 rounded-full bg-[#6D28D9] flex items-center justify-center font-bold text-white shadow-inner">
+                                                {user?.fullname?.[0] || 'U'}
+                                            </div>
+                                            <div className="overflow-hidden">
+                                                <p className="font-bold text-sm truncate text-[#111827] dark:text-white leading-tight">{user?.fullname}</p>
+                                                <p className="text-xs text-[#64748B] dark:text-gray-400 truncate mt-0.5">{user?.email}</p>
+                                            </div>
+                                        </div>
+                                        <button className="w-full text-left px-4 py-2 text-sm font-medium text-[#111827] dark:text-gray-200 hover:bg-[#F8FAFC] dark:hover:bg-gray-800 rounded-lg transition-colors">Profile settings</button>
+                                        <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
+                                        <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#DC2626] hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
+                                            <LogOut className="w-4 h-4" /> Sign out
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {rooms.map(room => {
-                                const isRoomOwner = (room.owner?._id || room.owner) === user?._id;
-                                const teacherName = room.owner?.fullname || (isRoomOwner ? user.fullname : 'Instructor');
-                                const bannerGradient = getBannerGradient(room.banner || 'purple');
+                    </div>
+                </header>
 
-                                return (
-                                    <motion.div
-                                        key={room._id}
-                                        initial={{ opacity: 0, y: 15 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        whileHover={{ y: -4 }}
-                                        className="bg-white dark:bg-[#18181c] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all flex flex-col h-76 group relative"
-                                    >
-                                        {/* Card Header Banner */}
-                                        <div
-                                            className={`h-28 bg-gradient-to-r ${bannerGradient} p-4 relative cursor-pointer text-white flex flex-col justify-between`}
-                                            onClick={() => navigate(`/room/${room._id}`)}
-                                        >
-                                            <div className="flex justify-between items-start">
-                                                <div className="overflow-hidden pr-2">
-                                                    <h2 className="text-lg font-bold truncate group-hover:underline" title={room.name}>
-                                                        {room.name}
-                                                    </h2>
-                                                    {room.section && (
-                                                        <p className="text-xs text-purple-200 font-medium mt-0.5 truncate">
-                                                            {room.section}
-                                                        </p>
-                                                    )}
-                                                </div>
+                <div className="px-6 md:px-10 pb-10 flex-1">
+                    {/* Tabs */}
+                    <div className="flex items-center gap-8 mb-8 border-b border-gray-200 dark:border-gray-800">
+                        <button 
+                            onClick={() => setActiveTab('classes')}
+                            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'classes' ? 'border-[#6D28D9] text-[#6D28D9]' : 'border-transparent text-[#64748B] hover:text-[#111827] dark:hover:text-white'}`}
+                        >
+                            My Classes
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('analytics')}
+                            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'analytics' ? 'border-[#6D28D9] text-[#6D28D9]' : 'border-transparent text-[#64748B] hover:text-[#111827] dark:hover:text-white'}`}
+                        >
+                            Global Analytics
+                        </button>
+                    </div>
 
-                                                {/* Three dots dropdown */}
-                                                <div className="relative">
-                                                    <button
-                                                        className="p-1 text-white/80 hover:text-white hover:bg-black/20 rounded-full transition-colors"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setActiveDropdown(activeDropdown === room._id ? null : room._id);
-                                                        }}
-                                                    >
-                                                        <MoreVertical className="w-5 h-5" />
-                                                    </button>
+                    {/* Classes Grid */}
+                    {activeTab === 'classes' || isTeacher ? (
+                        <>
+                            {/* Recently Due / Work Area (Teacher/Student Feature) */}
+                            <DashboardWorkArea user={user} />
+                            
+                            {loading ? (
+                                <div className="flex items-center justify-center py-24 text-gray-500">
+                                    <div className="animate-spin w-8 h-8 border-2 border-[#6D28D9] border-t-transparent rounded-full mr-3" />
+                                    Loading classes...
+                                </div>
+                            ) : rooms.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {rooms.map(room => {
+                                        const isRoomOwner = (room.owner?._id || room.owner) === user?._id;
+                                        const bannerGradient = getBannerGradient(room.banner || 'purple');
 
-                                                    {activeDropdown === room._id && (
-                                                        <div
-                                                            className="absolute top-8 right-0 bg-white dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-50 w-40 py-1 overflow-hidden animate-in fade-in duration-100"
-                                                            onClick={e => e.stopPropagation()}
+                                        return (
+                                            <motion.div 
+                                                key={room._id} 
+                                                initial={{ opacity: 0, y: 15 }} 
+                                                animate={{ opacity: 1, y: 0 }} 
+                                                whileHover={{ y: -4 }} 
+                                                className="bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-800 rounded-[20px] overflow-hidden shadow-sm hover:shadow-xl transition-all group relative flex flex-col h-auto cursor-pointer"
+                                                onClick={() => navigate(`/room/${room._id}`)}
+                                            >
+                                                {/* Card Banner */}
+                                                <div className={`h-[120px] relative ${bannerGradient} overflow-hidden`}>
+                                                    {/* Banner Image overlay */}
+                                                    <img src={classBanner} alt="Class Banner" className="w-full h-full object-cover opacity-60 mix-blend-multiply dark:mix-blend-normal" />
+                                                    
+                                                    {/* Overlay Gradient */}
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                                                    
+                                                    {/* Course Menu */}
+                                                    <div className="absolute top-3 right-3">
+                                                        <button 
+                                                            className="p-1.5 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-colors" 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveDropdown(activeDropdown === room._id ? null : room._id);
+                                                            }}
                                                         >
-                                                            {isRoomOwner ? (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => { setEditingRoom(room); setActiveDropdown(null); }}
-                                                                        className="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-                                                                    >
-                                                                        Edit class
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => navigate(`/room/${room._id}`)}
-                                                                        className="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-                                                                    >
-                                                                        Open class
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeleteClass(room._id)}
-                                                                        className="w-full text-left px-4 py-2 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors border-t border-gray-100 dark:border-white/5"
-                                                                    >
-                                                                        Delete class
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <button
-                                                                    onClick={() => handleUnenroll(room._id)}
-                                                                    className="w-full text-left px-4 py-2 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                                                                >
-                                                                    Unenroll
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <p className="text-xs text-gray-300 font-medium truncate">
-                                                {teacherName}
-                                            </p>
-
-                                            {/* Teacher Avatar overlap */}
-                                            <div className="absolute -bottom-6 right-4 w-14 h-14 rounded-full border-4 border-white dark:border-[#18181c] bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-lg text-white shadow-lg z-10">
-                                                {teacherName?.[0]?.toUpperCase() || 'T'}
-                                            </div>
-                                        </div>
-
-                                        {/* Card Body: Upcoming snippet */}
-                                        <div
-                                            className="p-4 flex-1 flex flex-col justify-between pt-7 cursor-pointer"
-                                            onClick={() => navigate(`/room/${room._id}`)}
-                                        >
-                                            <div>
-                                                {room.upcomingTask ? (
-                                                    <div className="space-y-1">
-                                                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Due soon</p>
-                                                        <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
-                                                            {room.upcomingTask.title}
-                                                        </p>
-                                                        <p className="text-[11px] text-purple-600 dark:text-purple-400">
-                                                            Due {new Date(room.upcomingTask.dueDate).toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
-                                                        </p>
+                                                            <MoreVertical className="w-5 h-5" />
+                                                        </button>
+                                                        
+                                                        {activeDropdown === room._id && (
+                                                            <div className="absolute top-9 right-0 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-50 w-40 py-1" onClick={(e) => e.stopPropagation()}>
+                                                                {isRoomOwner ? (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); setEditingRoom(room); setActiveDropdown(null); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F8FAFC] dark:hover:bg-gray-800 font-medium transition-colors">Edit Class</button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteClass(room._id); }} className="w-full text-left px-4 py-2 text-sm text-[#DC2626] hover:bg-red-50 dark:hover:bg-red-900/20 font-medium transition-colors">Delete Class</button>
+                                                                    </>
+                                                                ) : (
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleUnenroll(room._id); }} className="w-full text-left px-4 py-2 text-sm text-[#DC2626] hover:bg-red-50 dark:hover:bg-red-900/20 font-medium transition-colors">Unenroll</button>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <p className="text-xs text-gray-400 italic">No work due soon</p>
-                                                )}
-                                            </div>
 
-                                            <div className="text-[11px] font-mono text-gray-400 mt-2">
-                                                Code: <span className="font-bold text-purple-600 dark:text-purple-400">{room.code}</span>
-                                            </div>
-                                        </div>
+                                                    {/* Instructor Info */}
+                                                    <div className="absolute bottom-3 left-4 flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/40">
+                                                            <Users className="w-3 h-3 text-white" />
+                                                        </div>
+                                                        <span className="text-white text-xs font-medium drop-shadow-md">
+                                                            {isRoomOwner ? 'Owner' : 'Instructor'}
+                                                        </span>
+                                                    </div>
+                                                </div>
 
-                                        {/* Card Footer Quick Actions */}
-                                        <div className="px-4 py-2.5 border-t border-gray-100 dark:border-white/5 flex justify-end items-center gap-1 bg-gray-50/50 dark:bg-white/[0.02]">
-                                            <button
-                                                onClick={() => navigate(`/room/${room._id}`)}
-                                                className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                                                title="Open Classwork"
-                                            >
-                                                <Folder className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => navigate(`/room/${room._id}`)}
-                                                className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                                                title="Open Gradebook"
-                                            >
-                                                <Award className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
+                                                {/* Card Body */}
+                                                <div className="p-5 flex-1 flex flex-col justify-between bg-white dark:bg-[#1f2937]">
+                                                    <div>
+                                                        <h2 className="text-xl font-bold text-[#111827] dark:text-white line-clamp-1 mb-1 group-hover:text-[#6D28D9] transition-colors">{room.name}</h2>
+                                                        <div className="text-xs text-[#64748B] dark:text-gray-400 font-mono font-medium">Code: {room.code}</div>
+                                                    </div>
+                                                    
+                                                    {/* Quick Links inside Card */}
+                                                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="flex items-center gap-1.5 text-sm font-medium text-[#64748B] hover:text-[#6D28D9] dark:hover:text-[#8B5CF6] transition-colors">
+                                                                <FileText className="w-4 h-4" /> Stream
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 text-sm font-medium text-[#64748B] hover:text-[#6D28D9] dark:hover:text-[#8B5CF6] transition-colors">
+                                                                <Users className="w-4 h-4" /> People
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); navigate(`/room/${room._id}/classwork`); }}
+                                                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400 hover:text-[#6D28D9] dark:hover:text-[#8B5CF6] transition-colors"
+                                                                title="Open Classwork"
+                                                            >
+                                                                <Folder className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); navigate(`/room/${room._id}`); }}
+                                                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-400 hover:text-[#6D28D9] dark:hover:text-[#8B5CF6] transition-colors"
+                                                                title="Open Gradebook"
+                                                            >
+                                                                <Award className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-[#1f2937] rounded-[24px] border border-gray-100 dark:border-gray-800 text-center shadow-sm">
+                                    <div className="w-20 h-20 bg-[#F5F3FF] dark:bg-[#6D28D9]/10 rounded-full flex items-center justify-center mb-4">
+                                        <BookOpen className="w-8 h-8 text-[#6D28D9]" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-[#111827] dark:text-white mb-2">{isTeacher ? "Create your first class" : "No classes yet"}</h3>
+                                    <p className="text-[#64748B] dark:text-gray-400 max-w-sm mb-6">
+                                        {isTeacher ? "Start by creating a new classroom to post assignments." : "Join a class using your class code to get started."}
+                                    </p>
+                                    <button onClick={() => { isTeacher ? setIsCreateModalOpen(true) : setIsJoinModalOpen(true) }} className="px-6 py-2.5 bg-[#6D28D9] text-white rounded-xl font-bold hover:bg-[#5b21b6] transition-colors flex items-center gap-2">
+                                        <Plus className="w-4 h-4" /> {isTeacher ? 'Create Class' : 'Join Class'}
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="bg-white dark:bg-[#1f2937] rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-gray-800">
+                            <StudentGlobalAnalytics rooms={rooms} />
                         </div>
                     )}
-                </>
-            ) : (
-                <StudentGlobalAnalytics rooms={rooms} />
-            )}
+                </div>
+            </div>
+
+            {/* Right Side Widgets Panel */}
+            <div className="w-full lg:w-[340px] xl:w-[380px] bg-white dark:bg-[#0a0a0c] border-l border-gray-100 dark:border-gray-800 p-6 lg:p-8 flex flex-col gap-8 flex-shrink-0">
+                
+                {/* To-Do Overview */}
+                <div>
+                    <h3 className="text-lg font-bold text-[#111827] dark:text-white mb-4">To-do Overview</h3>
+                    <div className="bg-[#F5F3FF] dark:bg-[#1f2937] rounded-2xl p-5 border border-[#EDE9FE] dark:border-gray-700 flex items-center gap-5 shadow-sm">
+                        <div className="relative w-16 h-16 flex items-center justify-center">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                <path className="text-gray-200 dark:text-gray-700" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path className="text-[#6D28D9] transition-all duration-1000" strokeDasharray={`${completionPercentage}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            </svg>
+                            <span className="absolute text-sm font-bold text-[#111827] dark:text-white">{completionPercentage}%</span>
+                        </div>
+                        <div>
+                            <p className="font-bold text-[#111827] dark:text-white leading-tight mb-0.5">{completedTasksCount} of {totalTasksCount} tasks</p>
+                            <p className="text-xs text-[#64748B] dark:text-gray-400">completed overall</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Upcoming Tasks */}
+                <div>
+                    <div className="flex justify-between items-end mb-4">
+                        <h3 className="text-lg font-bold text-[#111827] dark:text-white">Upcoming Tasks</h3>
+                        <Link to="/room/personal" className="text-sm font-medium text-[#6D28D9] hover:underline">View all</Link>
+                    </div>
+                    
+                    {upcomingTasks.length > 0 ? (
+                        <div className="flex flex-col gap-3">
+                            {upcomingTasks.map((task, i) => {
+                                const isDueToday = new Date(task.dueDate).toDateString() === new Date().toDateString();
+                                return (
+                                    <div key={task._id || i} className="bg-white dark:bg-[#1f2937] p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm hover:border-[#EDE9FE] dark:hover:border-gray-600 transition-colors cursor-pointer group">
+                                        <h4 className="font-semibold text-sm text-[#111827] dark:text-gray-100 mb-1 line-clamp-1 group-hover:text-[#6D28D9]">{task.title}</h4>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${isDueToday ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400'}`}>
+                                                {isDueToday ? 'Due Today' : 'Upcoming'}
+                                            </div>
+                                            <span className="text-xs text-[#64748B] flex items-center gap-1">
+                                                <Clock className="w-3 h-3" /> {new Date(task.dueDate).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    ) : (
+                        <div className="bg-gray-50 dark:bg-[#1f2937] rounded-xl p-6 text-center border border-gray-100 dark:border-gray-700">
+                            <CheckCircle2 className="w-8 h-8 text-[#16A34A] mx-auto mb-2 opacity-50" />
+                            <p className="text-sm font-medium text-[#111827] dark:text-white">No upcoming tasks</p>
+                            <p className="text-xs text-[#64748B] dark:text-gray-400 mt-1">You're all caught up!</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Quick Access */}
+                <div>
+                    <h3 className="text-lg font-bold text-[#111827] dark:text-white mb-4">Quick Access</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Link to="/room/personal" className="flex flex-col items-center p-4 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl hover:border-[#6D28D9]/30 hover:shadow-sm transition-all group text-center">
+                            <div className="w-10 h-10 rounded-full bg-[#F5F3FF] dark:bg-[#6D28D9]/10 text-[#6D28D9] flex items-center justify-center mb-2 group-hover:bg-[#6D28D9] group-hover:text-white transition-colors">
+                                <FileText className="w-5 h-5" />
+                            </div>
+                            <span className="text-xs font-semibold text-[#111827] dark:text-white">Assignments</span>
+                        </Link>
+                        <Link to="/rooms" className="flex flex-col items-center p-4 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl hover:border-[#3B82F6]/30 hover:shadow-sm transition-all group text-center">
+                            <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-500/10 text-[#3B82F6] flex items-center justify-center mb-2 group-hover:bg-[#3B82F6] group-hover:text-white transition-colors">
+                                <BookOpen className="w-5 h-5" />
+                            </div>
+                            <span className="text-xs font-semibold text-[#111827] dark:text-white">Materials</span>
+                        </Link>
+                        <Link to="/attendance" className="flex flex-col items-center p-4 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl hover:border-[#16A34A]/30 hover:shadow-sm transition-all group text-center">
+                            <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-500/10 text-[#16A34A] flex items-center justify-center mb-2 group-hover:bg-[#16A34A] group-hover:text-white transition-colors">
+                                <ClipboardCheck className="w-5 h-5" />
+                            </div>
+                            <span className="text-xs font-semibold text-[#111827] dark:text-white">Attendance</span>
+                        </Link>
+                        <Link to="/analytics" className="flex flex-col items-center p-4 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl hover:border-[#F59E0B]/30 hover:shadow-sm transition-all group text-center">
+                            <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-500/10 text-[#F59E0B] flex items-center justify-center mb-2 group-hover:bg-[#F59E0B] group-hover:text-white transition-colors">
+                                <CheckCircle2 className="w-5 h-5" />
+                            </div>
+                            <span className="text-xs font-semibold text-[#111827] dark:text-white">Grades</span>
+                        </Link>
+                    </div>
+                </div>
+
+                {/* Recent Activity (Empty State representation) */}
+                <div>
+                    <h3 className="text-lg font-bold text-[#111827] dark:text-white mb-4">Recent Activity</h3>
+                    <div className="bg-white dark:bg-[#1f2937] p-5 rounded-xl border border-gray-100 dark:border-gray-700 text-center flex flex-col items-center justify-center shadow-sm">
+                        <MessageSquare className="w-6 h-6 text-gray-300 dark:text-gray-600 mb-2" />
+                        <p className="text-sm font-medium text-[#111827] dark:text-white">No recent activity</p>
+                        <p className="text-xs text-[#64748B] dark:text-gray-400 mt-1">Updates and announcements will appear here.</p>
+                    </div>
+                </div>
+
+            </div>
 
             {/* Create Class Modal */}
             <CreateClassModal
@@ -462,19 +518,19 @@ const RoomSelectionPage = ({ user, onLogout }) => {
             {/* Google Classroom Style Join Modal */}
             {isJoinModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-                    <div className="bg-white dark:bg-[#18181c] rounded-2xl border border-gray-200 dark:border-white/10 w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-                        <div className="p-5 border-b border-gray-200 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-white/[0.02]">
+                    <div className="bg-white dark:bg-[#1f2937] rounded-2xl border border-gray-200 dark:border-gray-700 w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+                        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111827]">
                             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Join class</h2>
                             <button onClick={() => setIsJoinModalOpen(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white text-xl font-bold">&times;</button>
                         </div>
 
                         <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
                             {/* Signed-in user card */}
-                            <div className="p-4 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-white/5 flex items-center justify-between">
+                            <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                                 <div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400">You are currently signed in as</p>
                                     <div className="flex items-center gap-3 mt-2">
-                                        <div className="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white text-sm">
+                                        <div className="w-9 h-9 rounded-full bg-[#6D28D9] flex items-center justify-center font-bold text-white text-sm">
                                             {user?.fullname?.[0]?.toUpperCase()}
                                         </div>
                                         <div>
@@ -485,21 +541,21 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                                 </div>
                                 <button
                                     onClick={onLogout}
-                                    className="text-xs text-purple-600 dark:text-purple-400 hover:underline font-semibold px-3 py-1.5 border border-purple-500/30 rounded-lg hover:bg-purple-500/10 transition-colors"
+                                    className="text-xs text-[#6D28D9] dark:text-[#8B5CF6] hover:underline font-semibold px-3 py-1.5 border border-[#6D28D9]/30 rounded-lg hover:bg-[#6D28D9]/10 transition-colors"
                                 >
                                     Switch account
                                 </button>
                             </div>
 
                             {/* Class Code Input */}
-                            <div className="border border-gray-200 dark:border-white/10 rounded-xl p-5 space-y-3">
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-3">
                                 <h3 className="font-bold text-sm text-gray-900 dark:text-white">Class code</h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">
                                     Ask your teacher for the 6-character class code, then enter it below.
                                 </p>
                                 <form id="joinForm" onSubmit={handleJoinRoom}>
                                     <input
-                                        className="w-full md:w-2/3 bg-gray-50 dark:bg-black/30 border border-gray-300 dark:border-white/20 rounded-xl px-4 py-3 focus:border-purple-500 outline-none text-gray-900 dark:text-white text-lg tracking-widest font-mono uppercase transition-colors"
+                                        className="w-full md:w-2/3 bg-gray-50 dark:bg-[#111827] border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 focus:border-[#6D28D9] outline-none text-gray-900 dark:text-white text-lg tracking-widest font-mono uppercase transition-colors"
                                         placeholder="CLASS CODE"
                                         value={joinCode}
                                         onChange={e => setJoinCode(e.target.value.toUpperCase())}
@@ -511,21 +567,13 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                                     </p>
                                 </form>
                             </div>
-
-                            <div className="text-xs text-gray-500 space-y-1">
-                                <p className="font-semibold text-gray-700 dark:text-gray-300">To sign in with a class code:</p>
-                                <ul className="list-disc pl-5 space-y-0.5">
-                                    <li>Use an authorized NexGenClass account</li>
-                                    <li>If joining issues occur, ask your instructor to verify the class code</li>
-                                </ul>
-                            </div>
                         </div>
 
-                        <div className="p-4 border-t border-gray-200 dark:border-white/10 flex justify-end gap-3 bg-gray-50/50 dark:bg-white/[0.02]">
+                        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111827]">
                             <button
                                 type="button"
                                 onClick={() => setIsJoinModalOpen(false)}
-                                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"
+                                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
                             >
                                 Cancel
                             </button>
@@ -533,7 +581,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                                 type="submit"
                                 form="joinForm"
                                 disabled={joinLoading || !isValidCode}
-                                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
+                                className="px-6 py-2 bg-[#6D28D9] hover:bg-[#5b21b6] disabled:opacity-50 text-white rounded-xl text-sm font-bold shadow-md transition-all active:scale-95"
                             >
                                 {joinLoading ? "Joining..." : "Join"}
                             </button>
