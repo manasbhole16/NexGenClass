@@ -27,6 +27,7 @@ const WelcomePage = () => {
           </Link>
 
           {/* CENTER: Links (Desktop) */}
+          <div className="hidden lg:flex items-center gap-8 text-[15px] font-medium text-[#64748B]">
             <a href="#features" className="hover:text-[#6D28D9] transition-colors">Features</a>
             <a href="#teachers" className="hover:text-[#6D28D9] transition-colors">For Teachers</a>
             <a href="#students" className="hover:text-[#6D28D9] transition-colors">For Students</a>
