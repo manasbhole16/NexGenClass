@@ -182,29 +182,6 @@ const WelcomePage = () => {
         </div>
       </section>
 
-      {/* 10. TRUST / STATISTICS SECTION */}
-      <section className="py-12 bg-white border-y border-gray-100">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 divide-x divide-gray-100">
-            <div className="flex flex-col items-center justify-center text-center px-4">
-              <span className="text-4xl font-bold text-[#111827] mb-2">10,000+</span>
-              <span className="text-sm font-medium text-[#64748B]">Active Users</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center px-4">
-              <span className="text-4xl font-bold text-[#111827] mb-2">500+</span>
-              <span className="text-sm font-medium text-[#64748B]">Classes</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center px-4">
-              <span className="text-4xl font-bold text-[#111827] mb-2">50K+</span>
-              <span className="text-sm font-medium text-[#64748B]">Assignments Completed</span>
-            </div>
-            <div className="flex flex-col items-center justify-center text-center px-4">
-              <span className="text-4xl font-bold text-[#111827] mb-2">98%</span>
-              <span className="text-sm font-medium text-[#64748B]">User Satisfaction</span>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* 11. FEATURES SECTION */}
       <section id="features" className="py-24 bg-[#F8FAFC]">
