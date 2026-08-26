@@ -113,28 +113,30 @@ module.exports.joinRoom = async (req, res) => {
 module.exports.getUserRooms = async (req, res) => {
     try {
         const rooms = await Room.find({ members: req.user._id })
+            .select('name code section subject room description banner archived joinEnabled owner createdAt')
             .populate('owner', 'fullname email role')
-            .populate('members', 'fullname email role createdAt')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
 
         // Add task counts / next upcoming deadline for rich cards
         const roomIds = rooms.map(r => r._id);
         const now = new Date();
-        const upcomingTasks = await Task.find({
+        const upcomingTasks = roomIds.length > 0 ? await Task.find({
             room: { $in: roomIds },
             dueDate: { $gte: now }
-        }).sort({ dueDate: 1 });
+        }).select('_id title dueDate taskType room').sort({ dueDate: 1 }).lean() : [];
 
         const enrichedRooms = rooms.map(r => {
-            const rObj = r.toObject();
             const nextTask = upcomingTasks.find(t => t.room && t.room.toString() === r._id.toString());
-            rObj.upcomingTask = nextTask ? {
-                _id: nextTask._id,
-                title: nextTask.title,
-                dueDate: nextTask.dueDate,
-                taskType: nextTask.taskType
-            } : null;
-            return rObj;
+            return {
+                ...r,
+                upcomingTask: nextTask ? {
+                    _id: nextTask._id,
+                    title: nextTask.title,
+                    dueDate: nextTask.dueDate,
+                    taskType: nextTask.taskType
+                } : null
+            };
         });
 
         res.json({ success: true, rooms: enrichedRooms });
@@ -441,23 +443,41 @@ module.exports.getDashboardSummary = async (req, res) => {
 
         if (userRole === 'teacher') {
             // Find rooms owned by teacher
-            const teacherRooms = await Room.find({ owner: userId });
+            const teacherRooms = await Room.find({ owner: userId }).select('_id').lean();
             const roomIds = teacherRooms.map(r => r._id);
+
+            if (roomIds.length === 0) {
+                return res.json({
+                    success: true,
+                    role: 'teacher',
+                    summary: {
+                        pendingGradingCount: 0,
+                        pendingSubmissions: [],
+                        recentlyDueTasks: [],
+                        upcomingTasks: [],
+                        totalClassrooms: 0
+                    }
+                });
+            }
 
             // Find all tasks in these rooms
             const tasks = await Task.find({ room: { $in: roomIds } })
+                .select('_id title dueDate room createdAt')
                 .populate('room', 'name section')
-                .sort({ dueDate: 1, createdAt: -1 });
+                .sort({ dueDate: 1, createdAt: -1 })
+                .lean();
 
             const taskIds = tasks.map(t => t._id);
 
             // Find submissions needing review
-            const pendingSubmissions = await Submission.find({
+            const pendingSubmissions = taskIds.length > 0 ? await Submission.find({
                 taskId: { $in: taskIds },
                 status: { $in: ['submitted', 'late'] },
                 $or: [{ marksAwarded: null }, { marksAwarded: { $exists: false } }]
-            }).populate('studentId', 'fullname email')
-              .populate('taskId', 'title maxMarks dueDate room');
+            }).select('_id taskId studentId status updatedAt createdAt')
+              .populate('studentId', 'fullname email')
+              .populate('taskId', 'title maxMarks dueDate room')
+              .lean() : [];
 
             // Find recently due tasks
             const now = new Date();
@@ -477,17 +497,33 @@ module.exports.getDashboardSummary = async (req, res) => {
             });
         } else {
             // Student View
-            const enrolledRooms = await Room.find({ members: userId, owner: { $ne: userId } });
+            const enrolledRooms = await Room.find({ members: userId, owner: { $ne: userId } }).select('_id').lean();
             const roomIds = enrolledRooms.map(r => r._id);
 
-            const tasks = await Task.find({ room: { $in: roomIds } })
-                .populate('room', 'name section')
-                .sort({ dueDate: 1 });
+            if (roomIds.length === 0) {
+                return res.json({
+                    success: true,
+                    role: 'student',
+                    summary: {
+                        upcomingTasks: [],
+                        missingTasks: [],
+                        completedTasks: [],
+                        totalEnrolled: 0
+                    }
+                });
+            }
 
-            const studentSubmissions = await Submission.find({
-                studentId: userId,
-                taskId: { $in: tasks.map(t => t._id) }
-            });
+            const [tasks, studentSubmissions] = await Promise.all([
+                Task.find({ room: { $in: roomIds } })
+                    .select('_id title dueDate taskType maxMarks room')
+                    .populate('room', 'name section')
+                    .sort({ dueDate: 1 })
+                    .lean(),
+                Submission.find({
+                    studentId: userId,
+                    roomId: { $in: roomIds }
+                }).select('_id taskId status marksAwarded grade submittedAt createdAt').lean()
+            ]);
 
             const subMap = new Map();
             studentSubmissions.forEach(s => subMap.set(s.taskId.toString(), s));

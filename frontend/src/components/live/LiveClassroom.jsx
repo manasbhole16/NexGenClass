@@ -48,9 +48,11 @@ const LiveClassroom = ({ roomId, user, isTeacher }) => {
     const recordedChunksRef = useRef([]);
 
     // Sockets & Refs
+    const socket = useSocket();
     const socketRef = useRef(null);
     const localVideoRef = useRef(null);
     const peerConnectionsRef = useRef({}); // userId -> RTCPeerConnection
+    const screenStreamRef = useRef(null);
 
     // Fetch current classroom live session
     const fetchCurrentSession = async () => {
@@ -75,74 +77,70 @@ const LiveClassroom = ({ roomId, user, isTeacher }) => {
     };
 
     useEffect(() => {
-        fetchCurrentSession();
+        if (roomId) {
+            fetchCurrentSession();
+        }
     }, [roomId]);
 
-    // Socket.IO setup for live signaling
+    // Socket.IO setup for live signaling using shared socket
     useEffect(() => {
-        const socket = io(API_BASE_URL, { withCredentials: true });
+        if (!socket) return;
         socketRef.current = socket;
 
-        if (user?._id) {
-            socket.emit('joinUser', { userId: user._id });
-        }
-
-        socket.on('liveSessionStarted', (liveSess) => {
+        const handleLiveSessionStarted = (liveSess) => {
             if (liveSess.roomId.toString() === roomId.toString()) {
                 setSession(liveSess);
             }
-        });
+        };
 
-        socket.on('liveSessionEnded', (endedSess) => {
+        const handleLiveSessionEnded = (endedSess) => {
             if (endedSess.roomId.toString() === roomId.toString()) {
                 setSession(null);
                 setInLiveSession(false);
                 cleanupMedia();
             }
-        });
+        };
 
-        // Chat & Hand Raising
-        socket.on('live:chat-message', (msg) => {
+        const handleChatMessage = (msg) => {
             setChatMessages(prev => [...prev, msg]);
-        });
+        };
 
-        socket.on('live:hand-raised', ({ user: u }) => {
+        const handleHandRaised = ({ user: u }) => {
             setRaisedHandsList(prev => [...prev.filter(h => h.userId !== u._id), { userId: u._id, fullname: u.fullname }]);
-        });
+        };
 
-        socket.on('live:hand-lowered', ({ user: u }) => {
+        const handleHandLowered = ({ user: u }) => {
             setRaisedHandsList(prev => prev.filter(h => h.userId !== u._id));
-        });
+        };
 
-        socket.on('live:participant-kicked', ({ userId }) => {
+        const handleParticipantKicked = ({ userId }) => {
             if (userId === user?._id) {
                 alert('You have been removed from this live class by the instructor.');
                 handleLeaveSession();
             }
-        });
+        };
 
-        socket.on('live:whiteboard-permission-updated', ({ studentsCanDraw: scd }) => {
+        const handleWhiteboardPerm = ({ studentsCanDraw: scd }) => {
             setStudentsCanDraw(scd);
-        });
+        };
 
-        // WebRTC Signaling
-        socket.on('live:peer-joined', async ({ userId, fullname, role }) => {
+        const handlePeerJoined = async ({ userId, fullname, role }) => {
             if (userId === user?._id) return;
             createPeerOffer(userId, fullname, role);
-        });
+        };
 
-        socket.on('webrtc:offer', async ({ offer, senderId, senderName }) => {
+        const handleWebrtcOffer = async ({ offer, senderId, senderName }) => {
             handleReceiveOffer(senderId, senderName, offer);
-        });
+        };
 
-        socket.on('webrtc:answer', async ({ answer, senderId }) => {
+        const handleWebrtcAnswer = async ({ answer, senderId }) => {
             const pc = peerConnectionsRef.current[senderId];
             if (pc) {
                 await pc.setRemoteDescription(new RTCSessionDescription(answer));
             }
-        });
+        };
 
-        socket.on('webrtc:ice-candidate', async ({ candidate, senderId }) => {
+        const handleIceCandidate = async ({ candidate, senderId }) => {
             const pc = peerConnectionsRef.current[senderId];
             if (pc && candidate) {
                 try {
@@ -151,16 +149,40 @@ const LiveClassroom = ({ roomId, user, isTeacher }) => {
                     console.warn('ICE candidate addition error:', e);
                 }
             }
-        });
+        };
 
-        socket.on('live:peer-left', ({ userId }) => {
+        const handlePeerLeft = ({ userId }) => {
             removePeer(userId);
-        });
+        };
+
+        socket.on('liveSessionStarted', handleLiveSessionStarted);
+        socket.on('liveSessionEnded', handleLiveSessionEnded);
+        socket.on('live:chat-message', handleChatMessage);
+        socket.on('live:hand-raised', handleHandRaised);
+        socket.on('live:hand-lowered', handleHandLowered);
+        socket.on('live:participant-kicked', handleParticipantKicked);
+        socket.on('live:whiteboard-permission-updated', handleWhiteboardPerm);
+        socket.on('live:peer-joined', handlePeerJoined);
+        socket.on('webrtc:offer', handleWebrtcOffer);
+        socket.on('webrtc:answer', handleWebrtcAnswer);
+        socket.on('webrtc:ice-candidate', handleIceCandidate);
+        socket.on('live:peer-left', handlePeerLeft);
 
         return () => {
-            socket.disconnect();
+            socket.off('liveSessionStarted', handleLiveSessionStarted);
+            socket.off('liveSessionEnded', handleLiveSessionEnded);
+            socket.off('live:chat-message', handleChatMessage);
+            socket.off('live:hand-raised', handleHandRaised);
+            socket.off('live:hand-lowered', handleHandLowered);
+            socket.off('live:participant-kicked', handleParticipantKicked);
+            socket.off('live:whiteboard-permission-updated', handleWhiteboardPerm);
+            socket.off('live:peer-joined', handlePeerJoined);
+            socket.off('webrtc:offer', handleWebrtcOffer);
+            socket.off('webrtc:answer', handleWebrtcAnswer);
+            socket.off('webrtc:ice-candidate', handleIceCandidate);
+            socket.off('live:peer-left', handlePeerLeft);
         };
-    }, [roomId, user]);
+    }, [roomId, socket, user]);
 
     // Media Device Init
     const initLocalMedia = async () => {

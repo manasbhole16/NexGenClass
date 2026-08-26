@@ -23,10 +23,11 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
+import { useRooms } from '../../context/RoomsContext';
 
 const TeacherAttendanceDashboard = ({ user }) => {
-    const [rooms, setRooms] = useState([]);
+    const { rooms } = useRooms();
     const [selectedRoom, setSelectedRoom] = useState('');
     const [activeTab, setActiveTab] = useState('take'); // 'take', 'history', 'report', 'analytics'
     
@@ -45,49 +46,39 @@ const TeacherAttendanceDashboard = ({ user }) => {
     const [statsData, setStatsData] = useState(null);
     
     // UI Controls
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [saveMessage, setSaveMessage] = useState('');
+    const socket = useSocket();
+
+    const ownedRooms = rooms.filter(r => (r.owner === user?._id || r.owner?._id === user?._id));
 
     useEffect(() => {
-        const fetchRooms = async () => {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/rooms/my-rooms`, { credentials: 'include' });
-                const json = await res.json();
-                if (json.success) {
-                    const ownedRooms = json.rooms.filter(r => r.owner === user._id || r.owner?._id === user._id || r.members?.some(m => m === user._id || m?._id === user._id));
-                    setRooms(ownedRooms);
-                    if (ownedRooms.length > 0) setSelectedRoom(ownedRooms[0]._id);
-                }
-            } catch (err) {
-                console.error("Failed to fetch classrooms", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchRooms();
-    }, [user]);
+        if (!selectedRoom && ownedRooms.length > 0) {
+            setSelectedRoom(ownedRooms[0]._id);
+        }
+    }, [ownedRooms, selectedRoom]);
 
-    // Socket.IO real-time sync
+    // Socket.IO real-time sync via shared socket
     useEffect(() => {
-        if (!selectedRoom) return;
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-        socket.emit('join_room', selectedRoom);
+        if (!socket || !selectedRoom) return;
 
-        socket.on('attendance_updated', (data) => {
-            if (data.roomId === selectedRoom) {
+        const handleAttendanceUpdated = (data) => {
+            if (data?.roomId === selectedRoom) {
                 fetchSessions();
                 if (activeTab === 'report') fetchReport();
                 if (activeTab === 'analytics') fetchStats();
             }
-        });
+        };
+
+        socket.on('attendance_updated', handleAttendanceUpdated);
 
         return () => {
-            socket.disconnect();
+            socket.off('attendance_updated', handleAttendanceUpdated);
         };
-    }, [selectedRoom, activeTab]);
+    }, [socket, selectedRoom, activeTab]);
 
     useEffect(() => {
         if (selectedRoom) {

@@ -22,7 +22,7 @@ import {
     Printer
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 const ClassroomAnalytics = ({ roomId }) => {
     const [loading, setLoading] = useState(true);
@@ -31,6 +31,11 @@ const ClassroomAnalytics = ({ roomId }) => {
     const [selectedTopic, setSelectedTopic] = useState('all');
     const [searchRoster, setSearchRoster] = useState('');
     const [selectedStudentDetail, setSelectedStudentDetail] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [filterAttentionOnly, setFilterAttentionOnly] = useState(false);
+    const socket = useSocket();
 
     // Fetch Classroom Analytics from API
     const fetchAnalytics = async () => {
@@ -38,6 +43,8 @@ const ClassroomAnalytics = ({ roomId }) => {
             setLoading(true);
             const params = new URLSearchParams();
             if (selectedTopic && selectedTopic !== 'all') params.append('topic', selectedTopic);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
 
             const res = await fetch(`${API_BASE_URL}/api/analytics/class/${roomId}?${params.toString()}`, { credentials: 'include' });
             const json = await res.json();
@@ -59,9 +66,7 @@ const ClassroomAnalytics = ({ roomId }) => {
 
     // Socket.IO Real-Time Sync
     useEffect(() => {
-        if (!roomId || roomId === 'personal') return;
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-        socket.emit('joinRoom', { roomId });
+        if (!socket || !roomId || roomId === 'personal') return;
 
         const handleUpdate = () => {
             fetchAnalytics();
@@ -74,9 +79,13 @@ const ClassroomAnalytics = ({ roomId }) => {
         socket.on('quizCreated', handleUpdate);
 
         return () => {
-            socket.disconnect();
+            socket.off('taskCreated', handleUpdate);
+            socket.off('taskUpdated', handleUpdate);
+            socket.off('submissionCreated', handleUpdate);
+            socket.off('attendance_updated', handleUpdate);
+            socket.off('quizCreated', handleUpdate);
         };
-    }, [roomId]);
+    }, [socket, roomId]);
 
     const handleExportCSV = () => {
         window.open(`${API_BASE_URL}/api/analytics/class/${roomId}/export`, '_blank');

@@ -19,7 +19,7 @@ import {
     ShieldAlert
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 const NotificationCenter = ({ user }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -27,34 +27,48 @@ const NotificationCenter = ({ user }) => {
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
     const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'unread'
+    const [hasLoadedNotifications, setHasLoadedNotifications] = useState(false);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
+    const socket = useSocket();
 
+    // Fetch initial unread count on mount
     useEffect(() => {
         if (user?._id) {
             fetchUnreadCount();
-            fetchRecentNotifications();
-
-            // Socket.IO real-time notification listener
-            const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-            socket.emit("joinUser", { userId: user._id });
-
-            socket.on("notification:new", (newNotif) => {
-                setNotifications(prev => [newNotif, ...prev.filter(n => n._id !== newNotif._id)].slice(0, 30));
-                setUnreadCount(prev => prev + 1);
-            });
-
-            socket.on("notification:unread_count", ({ unreadCount: newCount }) => {
-                if (typeof newCount === 'number') {
-                    setUnreadCount(newCount);
-                }
-            });
-
-            return () => {
-                socket.disconnect();
-            };
         }
     }, [user?._id]);
+
+    // Lazy fetch notification list when dropdown is opened
+    useEffect(() => {
+        if (isOpen && user?._id && !hasLoadedNotifications) {
+            fetchRecentNotifications();
+        }
+    }, [isOpen, user?._id, hasLoadedNotifications]);
+
+    // Socket.IO real-time notification listener via shared connection
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewNotification = (newNotif) => {
+            setNotifications(prev => [newNotif, ...prev.filter(n => n._id !== newNotif._id)].slice(0, 30));
+            setUnreadCount(prev => prev + 1);
+        };
+
+        const handleUnreadCount = ({ unreadCount: newCount }) => {
+            if (typeof newCount === 'number') {
+                setUnreadCount(newCount);
+            }
+        };
+
+        socket.on("notification:new", handleNewNotification);
+        socket.on("notification:unread_count", handleUnreadCount);
+
+        return () => {
+            socket.off("notification:new", handleNewNotification);
+            socket.off("notification:unread_count", handleUnreadCount);
+        };
+    }, [socket]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -95,6 +109,7 @@ const NotificationCenter = ({ user }) => {
             if (data.success) {
                 setNotifications(data.notifications || []);
                 setUnreadCount(data.unreadCount || 0);
+                setHasLoadedNotifications(true);
             }
         } catch (err) {
             console.error("Failed to fetch notifications", err);

@@ -46,7 +46,8 @@ import {
     ExternalLink
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
+import { useRooms } from '../../context/RoomsContext';
 
 const EVENT_CONFIG = {
     assignment: {
@@ -100,7 +101,6 @@ const AcademicPlanner = ({ user, onOpenAssignment, onOpenQuiz }) => {
     
     // Data & Filters
     const [events, setEvents] = useState([]);
-    const [rooms, setRooms] = useState([]);
     const [upcomingAgenda, setUpcomingAgenda] = useState(null);
     const [loading, setLoading] = useState(true);
     
@@ -120,30 +120,13 @@ const AcademicPlanner = ({ user, onOpenAssignment, onOpenQuiz }) => {
         priority: 'Medium'
     });
 
+    const { rooms } = useRooms();
+    const socket = useSocket();
     const isTeacher = user?.role === 'teacher';
 
-    // Fetch Classrooms
+    // Socket.IO Real-time Synchronization via shared socket
     useEffect(() => {
-        const fetchRooms = async () => {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/rooms/my-rooms`, { credentials: 'include' });
-                const json = await res.json();
-                if (json.success) setRooms(json.rooms || []);
-            } catch (err) {
-                console.error("Failed to load rooms", err);
-            }
-        };
-        fetchRooms();
-    }, []);
-
-    // Socket.IO Real-time Synchronization
-    useEffect(() => {
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-        
-        socket.emit('joinUser', { userId: user?._id });
-        if (rooms.length > 0) {
-            rooms.forEach(r => socket.emit('joinRoom', { roomId: r._id, user }));
-        }
+        if (!socket) return;
 
         const handleUpdate = () => {
             fetchEvents();
@@ -157,9 +140,13 @@ const AcademicPlanner = ({ user, onOpenAssignment, onOpenQuiz }) => {
         socket.on('quizCreated', handleUpdate);
 
         return () => {
-            socket.disconnect();
+            socket.off('taskCreated', handleUpdate);
+            socket.off('taskUpdated', handleUpdate);
+            socket.off('taskDeleted', handleUpdate);
+            socket.off('attendance_updated', handleUpdate);
+            socket.off('quizCreated', handleUpdate);
         };
-    }, [user, rooms, viewMode]);
+    }, [socket, viewMode]);
 
     // Fetch Events when period or filter changes
     useEffect(() => {

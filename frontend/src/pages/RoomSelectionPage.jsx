@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-// eslint-disable-next-line no-unused-vars
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
     Plus, Users, BookOpen, Loader, LogOut, MoreVertical,
@@ -8,22 +7,44 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import API_BASE_URL from '../apiConfig';
-import StudentGlobalAnalytics from '../components/analytics/StudentGlobalAnalytics';
-import CreateClassModal from '../components/classroom/CreateClassModal';
-import EditClassModal from '../components/classroom/EditClassModal';
 import DashboardWorkArea from '../components/classroom/DashboardWorkArea';
 import NotificationCenter from '../components/notifications/NotificationCenter';
 import { getBannerGradient } from '../utils/themeUtils';
 import classBanner from '../assets/class_banner.jpg';
+import { useRooms } from '../context/RoomsContext';
+
+// Lazy load secondary heavy components
+const StudentGlobalAnalytics = lazy(() => import('../components/analytics/StudentGlobalAnalytics'));
+const CreateClassModal = lazy(() => import('../components/classroom/CreateClassModal'));
+const EditClassModal = lazy(() => import('../components/classroom/EditClassModal'));
+
+const ClassroomSkeletonGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {[1, 2, 3, 4, 5, 6].map(n => (
+            <div key={n} className="bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-800 rounded-[20px] overflow-hidden shadow-sm flex flex-col h-72 animate-pulse">
+                <div className="h-[120px] bg-gradient-to-r from-purple-500/10 to-indigo-500/10 p-4 relative flex flex-col justify-between">
+                    <div className="h-5 bg-gray-200 dark:bg-white/10 rounded-md w-3/4" />
+                    <div className="h-3 bg-gray-200 dark:bg-white/10 rounded-md w-1/2" />
+                </div>
+                <div className="p-5 flex-1 flex flex-col justify-between bg-white dark:bg-[#1f2937] space-y-3">
+                    <div className="space-y-2">
+                        <div className="h-4 bg-gray-200 dark:bg-white/10 rounded w-2/3" />
+                        <div className="h-3 bg-gray-200 dark:bg-white/10 rounded w-1/3" />
+                    </div>
+                    <div className="h-3 bg-gray-200 dark:bg-white/10 rounded w-1/4" />
+                </div>
+            </div>
+        ))}
+    </div>
+);
 
 const RoomSelectionPage = ({ user, onLogout }) => {
-    const [rooms, setRooms] = useState([]);
+    const { rooms, loading, addRoom, updateRoom, removeRoom } = useRooms();
     const [tasks, setTasks] = useState([]); // For global tasks
     const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingRoom, setEditingRoom] = useState(null);
     const [joinCode, setJoinCode] = useState('');
-    const [loading, setLoading] = useState(true);
     const [joinLoading, setJoinLoading] = useState(false);
     const [showProfileInfo, setShowProfileInfo] = useState(false);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -37,7 +58,6 @@ const RoomSelectionPage = ({ user, onLogout }) => {
     const isValidCode = joinCode.length >= 5 && joinCode.length <= 8 && /^[a-zA-Z0-9]+$/.test(joinCode);
 
     useEffect(() => {
-        fetchRooms();
         fetchGlobalTasks();
 
         // Check if join code was passed in URL
@@ -55,30 +75,15 @@ const RoomSelectionPage = ({ user, onLogout }) => {
         return () => window.removeEventListener('click', handleClickOutside);
     }, [searchParams]);
 
-    async function fetchRooms() {
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/rooms/my-rooms`, { credentials: 'include' });
-            const data = await res.json();
-            if (data.success) {
-                setRooms(data.rooms || []);
-            }
-        } catch (err) {
-            console.error("Failed to load classrooms", err);
-        } finally {
-            setLoading(false);
-        }
-    }
-
     async function fetchGlobalTasks() {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/tasks?roomId=all`, { credentials: 'include' })
-            const data = await res.json()
+            const res = await fetch(`${API_BASE_URL}/api/tasks?roomId=all`, { credentials: 'include' });
+            const data = await res.json();
             if (data.success) {
-                setTasks(data.tasks)
+                setTasks(data.tasks || []);
             }
         } catch (err) {
-            console.error(err)
+            console.error("Failed to load global tasks", err);
         }
     }
 
@@ -94,9 +99,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
             });
             const data = await res.json();
             if (data.success && data.room) {
-                if (!rooms.find(r => r._id === data.room._id)) {
-                    setRooms([data.room, ...rooms]);
-                }
+                addRoom(data.room);
                 setIsJoinModalOpen(false);
                 setJoinCode('');
                 navigate(`/room/${data.room._id}`);
@@ -121,7 +124,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
             });
             const data = await res.json();
             if (data.success) {
-                setRooms(rooms.filter(r => r._id !== roomId));
+                removeRoom(roomId);
                 setActiveDropdown(null);
             } else {
                 alert(data.message || "Failed to unenroll");
@@ -140,22 +143,20 @@ const RoomSelectionPage = ({ user, onLogout }) => {
             });
             const data = await res.json();
             if (data.success) {
-                setRooms(rooms.filter(r => r._id !== roomId));
+                removeRoom(roomId);
                 setActiveDropdown(null);
             } else {
-                alert(data.message || "Failed to delete class");
+                alert(data.message || "Failed to delete classroom");
             }
         } catch (err) {
             console.error(err);
         }
     };
 
-    // Calculate task completion percentage
-    const completedTasksCount = tasks.filter(t => t.completed).length;
     const totalTasksCount = tasks.length;
+    const completedTasksCount = tasks.filter(t => t.completed).length;
     const completionPercentage = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
-    
-    // Sort upcoming tasks (uncompleted, closest due date first)
+
     const upcomingTasks = tasks
         .filter(t => !t.completed && t.dueDate)
         .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
@@ -197,47 +198,37 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                                         onClick={(e) => { e.stopPropagation(); setPlusMenuOpen(!plusMenuOpen); }}
                                         className="h-10 px-4 bg-[#6D28D9] text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#5b21b6] hover:shadow-md transition-all"
                                     >
-                                        <Plus className="w-4 h-4" /> Manage
+                                        <Plus className="w-4 h-4" />
+                                        <span>Create Class</span>
                                     </button>
                                     {plusMenuOpen && (
-                                        <div className="absolute right-0 top-12 w-40 z-50 animate-in fade-in duration-100">
-                                            <div className="bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl shadow-lg flex flex-col overflow-hidden py-1">
-                                                <button onClick={() => { setIsJoinModalOpen(true); setPlusMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F5F3FF] dark:hover:bg-gray-800 transition-colors font-medium">Join class</button>
-                                                <button onClick={() => { setIsCreateModalOpen(true); setPlusMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F5F3FF] dark:hover:bg-gray-800 transition-colors font-medium">Create class</button>
-                                            </div>
+                                        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1" onClick={(e) => e.stopPropagation()}>
+                                            <button onClick={() => { setIsCreateModalOpen(true); setPlusMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F8FAFC] dark:hover:bg-gray-800 font-medium transition-colors">Create Class</button>
+                                            <button onClick={() => { setIsJoinModalOpen(true); setPlusMenuOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-[#111827] dark:text-gray-200 hover:bg-[#F8FAFC] dark:hover:bg-gray-800 font-medium transition-colors">Join Class</button>
                                         </div>
                                     )}
                                 </div>
                             ) : (
-                                <button onClick={() => setIsJoinModalOpen(true)} className="h-10 px-4 bg-[#6D28D9] text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#5b21b6] hover:shadow-md transition-all">
-                                    <Plus className="w-4 h-4" /> Join Class
+                                <button 
+                                    onClick={() => setIsJoinModalOpen(true)}
+                                    className="h-10 px-4 bg-[#6D28D9] text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#5b21b6] hover:shadow-md transition-all"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    <span>Join Class</span>
                                 </button>
                             )}
 
-                            {/* Profile Dropdown */}
+                            {/* User Profile Avatar */}
                             <div className="relative">
-                                <button 
-                                    className="w-10 h-10 rounded-full bg-[#EDE9FE] dark:bg-[#6D28D9]/20 text-[#6D28D9] dark:text-[#8B5CF6] flex items-center justify-center font-bold text-lg border border-transparent hover:border-[#6D28D9]/30 transition-colors"
-                                    onClick={(e) => { e.stopPropagation(); setShowProfileInfo(!showProfileInfo); }}
-                                >
-                                    {user?.fullname?.[0] || 'U'}
+                                <button onClick={() => setShowProfileInfo(!showProfileInfo)} className="w-10 h-10 rounded-xl bg-[#EDE9FE] dark:bg-[#6D28D9]/20 text-[#6D28D9] dark:text-[#8B5CF6] font-bold flex items-center justify-center border border-[#6D28D9]/20 hover:scale-105 transition-transform">
+                                    {user?.fullname?.[0]?.toUpperCase() || 'U'}
                                 </button>
-
                                 {showProfileInfo && (
-                                    <div className="absolute top-12 right-0 w-64 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-2xl p-2 shadow-xl z-50 flex flex-col">
-                                        <div className="flex items-center gap-3 p-3 mb-1 bg-[#F8FAFC] dark:bg-gray-800/50 rounded-xl">
-                                            <div className="w-10 h-10 rounded-full bg-[#6D28D9] flex items-center justify-center font-bold text-white shadow-inner">
-                                                {user?.fullname?.[0] || 'U'}
-                                            </div>
-                                            <div className="overflow-hidden">
-                                                <p className="font-bold text-sm truncate text-[#111827] dark:text-white leading-tight">{user?.fullname}</p>
-                                                <p className="text-xs text-[#64748B] dark:text-gray-400 truncate mt-0.5">{user?.email}</p>
-                                            </div>
-                                        </div>
-                                        <button className="w-full text-left px-4 py-2 text-sm font-medium text-[#111827] dark:text-gray-200 hover:bg-[#F8FAFC] dark:hover:bg-gray-800 rounded-lg transition-colors">Profile settings</button>
-                                        <div className="h-px bg-gray-100 dark:bg-gray-700 my-1"></div>
-                                        <button onClick={onLogout} className="w-full text-left flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#DC2626] hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
-                                            <LogOut className="w-4 h-4" /> Sign out
+                                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-[#1f2937] border border-gray-100 dark:border-gray-700 rounded-2xl shadow-xl z-50 p-4" onClick={(e) => e.stopPropagation()}>
+                                        <p className="font-bold text-sm text-[#111827] dark:text-white line-clamp-1">{user?.fullname}</p>
+                                        <p className="text-xs text-[#64748B] dark:text-gray-400 mb-3">{user?.email}</p>
+                                        <button onClick={onLogout} className="w-full py-2 bg-red-50 dark:bg-red-900/20 text-[#DC2626] rounded-xl text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors flex items-center justify-center gap-2">
+                                            <LogOut className="w-3.5 h-3.5" /> Log Out
                                         </button>
                                     </div>
                                 )}
@@ -246,22 +237,24 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                     </div>
                 </header>
 
-                <div className="px-6 md:px-10 pb-10 flex-1">
-                    {/* Tabs */}
-                    <div className="flex items-center gap-8 mb-8 border-b border-gray-200 dark:border-gray-800">
-                        <button 
-                            onClick={() => setActiveTab('classes')}
-                            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'classes' ? 'border-[#6D28D9] text-[#6D28D9]' : 'border-transparent text-[#64748B] hover:text-[#111827] dark:hover:text-white'}`}
-                        >
-                            My Classes
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('analytics')}
-                            className={`pb-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'analytics' ? 'border-[#6D28D9] text-[#6D28D9]' : 'border-transparent text-[#64748B] hover:text-[#111827] dark:hover:text-white'}`}
-                        >
-                            Global Analytics
-                        </button>
-                    </div>
+                <div className="px-6 md:px-10 py-4 flex-1">
+                    {/* Tabs for Student */}
+                    {!isTeacher && (
+                        <div className="flex items-center gap-8 border-b border-gray-200 dark:border-gray-800 mb-8">
+                            <button 
+                                onClick={() => setActiveTab('classes')}
+                                className={`pb-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'classes' ? 'border-[#6D28D9] text-[#6D28D9]' : 'border-transparent text-[#64748B] hover:text-[#111827] dark:hover:text-white'}`}
+                            >
+                                My Classes
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('analytics')}
+                                className={`pb-4 text-sm font-bold transition-colors border-b-2 ${activeTab === 'analytics' ? 'border-[#6D28D9] text-[#6D28D9]' : 'border-transparent text-[#64748B] hover:text-[#111827] dark:hover:text-white'}`}
+                            >
+                                Global Analytics
+                            </button>
+                        </div>
+                    )}
 
                     {/* Classes Grid */}
                     {activeTab === 'classes' || isTeacher ? (
@@ -270,10 +263,7 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                             <DashboardWorkArea user={user} />
                             
                             {loading ? (
-                                <div className="flex items-center justify-center py-24 text-gray-500">
-                                    <div className="animate-spin w-8 h-8 border-2 border-[#6D28D9] border-t-transparent rounded-full mr-3" />
-                                    Loading classes...
-                                </div>
+                                <ClassroomSkeletonGrid />
                             ) : rooms.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                                     {rooms.map(room => {
@@ -390,7 +380,9 @@ const RoomSelectionPage = ({ user, onLogout }) => {
                         </>
                     ) : (
                         <div className="bg-white dark:bg-[#1f2937] rounded-[24px] p-6 shadow-sm border border-gray-100 dark:border-gray-800">
-                            <StudentGlobalAnalytics rooms={rooms} />
+                            <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full mr-3" />Loading analytics...</div>}>
+                                <StudentGlobalAnalytics rooms={rooms} />
+                            </Suspense>
                         </div>
                     )}
                 </div>
@@ -496,24 +488,32 @@ const RoomSelectionPage = ({ user, onLogout }) => {
             </div>
 
             {/* Create Class Modal */}
-            <CreateClassModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                onClassCreated={(newRoom) => {
-                    setRooms([newRoom, ...rooms]);
-                    navigate(`/room/${newRoom._id}`);
-                }}
-            />
+            <Suspense fallback={null}>
+                {isCreateModalOpen && (
+                    <CreateClassModal
+                        isOpen={isCreateModalOpen}
+                        onClose={() => setIsCreateModalOpen(false)}
+                        onClassCreated={(newRoom) => {
+                            addRoom(newRoom);
+                            navigate(`/room/${newRoom._id}`);
+                        }}
+                    />
+                )}
+            </Suspense>
 
             {/* Edit Class Modal */}
-            <EditClassModal
-                isOpen={!!editingRoom}
-                room={editingRoom}
-                onClose={() => setEditingRoom(null)}
-                onClassUpdated={(updated) => {
-                    setRooms(rooms.map(r => r._id === updated._id ? updated : r));
-                }}
-            />
+            <Suspense fallback={null}>
+                {editingRoom && (
+                    <EditClassModal
+                        isOpen={!!editingRoom}
+                        room={editingRoom}
+                        onClose={() => setEditingRoom(null)}
+                        onClassUpdated={(updated) => {
+                            updateRoom(updated);
+                        }}
+                    />
+                )}
+            </Suspense>
 
             {/* Google Classroom Style Join Modal */}
             {isJoinModalOpen && (

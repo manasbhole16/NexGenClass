@@ -14,18 +14,19 @@ import {
     BarChart3
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 const StudentAttendanceDashboard = ({ user }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedSubject, setSelectedSubject] = useState('All');
+    const socket = useSocket();
 
     const fetchAttendance = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`${API_BASE_URL}/api/attendance/student`, { credentials: 'include' });
+            const res = await fetch(`${API_BASE_URL}/api/attendance/student/me`, { credentials: 'include' });
             const json = await res.json();
             if (json.success) {
                 setData(json);
@@ -41,18 +42,20 @@ const StudentAttendanceDashboard = ({ user }) => {
         fetchAttendance();
     }, []);
 
-    // Real-time Socket.IO listener
+    // Real-time Socket.IO listener via shared socket
     useEffect(() => {
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-        
-        socket.on('attendance_updated', () => {
+        if (!socket) return;
+
+        const handleAttendanceUpdate = () => {
             fetchAttendance();
-        });
+        };
+
+        socket.on('attendance_updated', handleAttendanceUpdate);
 
         return () => {
-            socket.disconnect();
+            socket.off('attendance_updated', handleAttendanceUpdate);
         };
-    }, []);
+    }, [socket]);
 
     if (loading) {
         return (

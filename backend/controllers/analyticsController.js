@@ -71,7 +71,7 @@ exports.getStudentAnalytics = async (req, res) => {
         const { roomId, startDate, endDate } = req.query;
 
         // Find enrolled classrooms
-        const enrolledRooms = await Room.find({ members: studentId }).select("_id name code subject section owner");
+        const enrolledRooms = await Room.find({ members: studentId }).select("_id name code subject section owner").lean();
         const enrolledRoomIds = enrolledRooms.map(r => r._id);
         const roomMap = new Map(enrolledRooms.map(r => [r._id.toString(), r]));
 
@@ -99,7 +99,7 @@ exports.getStudentAnalytics = async (req, res) => {
             else if (eStr) attQuery.date = { $lte: eStr };
         }
 
-        const attendanceSessions = await Attendance.find(attQuery).sort({ date: 1 });
+        const attendanceSessions = await Attendance.find(attQuery).sort({ date: 1 }).lean();
         let totalSessions = 0;
         let presentCount = 0;
         let lateCount = 0;
@@ -176,7 +176,8 @@ exports.getStudentAnalytics = async (req, res) => {
 
         const eligibleTasks = await Task.find(taskQuery)
             .populate("room", "name code")
-            .select("title dueDate maxMarks priority topic room assignedTo taskType");
+            .select("title dueDate maxMarks priority topic room assignedTo taskType")
+            .lean();
 
         // Filter tasks assigned to all or explicitly to student
         const studentTasks = eligibleTasks.filter(t => {
@@ -188,7 +189,7 @@ exports.getStudentAnalytics = async (req, res) => {
         const submissions = await Submission.find({
             studentId,
             taskId: { $in: taskIds }
-        }).select("taskId status marksAwarded grade submittedAt createdAt");
+        }).select("taskId status marksAwarded grade submittedAt createdAt").lean();
 
         const subMap = new Map();
         submissions.forEach(s => subMap.set(s.taskId.toString(), s));
@@ -272,14 +273,14 @@ exports.getStudentAnalytics = async (req, res) => {
             roomId: { $in: targetRoomIds },
             isPublished: true
         };
-        const quizzes = await Quiz.find(quizQuery).select("title deadline startDate totalMarks passingMarks resultVisibility isResultsReleased topic roomId");
+        const quizzes = await Quiz.find(quizQuery).select("title deadline startDate totalMarks passingMarks resultVisibility isResultsReleased topic roomId").lean();
         const quizIds = quizzes.map(q => q._id);
 
         const attempts = await Attempt.find({
             studentId,
             quizId: { $in: quizIds },
             status: { $in: ["submitted", "graded"] }
-        }).populate("quizId", "title totalMarks passingMarks resultVisibility isResultsReleased roomId");
+        }).populate("quizId", "title totalMarks passingMarks resultVisibility isResultsReleased roomId").lean();
 
         let totalQuizzes = quizzes.length;
         let completedQuizzesCount = attempts.length;
@@ -502,7 +503,7 @@ exports.getClassroomAnalytics = async (req, res) => {
             else if (eStr) attQuery.date = { $lte: eStr };
         }
 
-        const sessions = await Attendance.find(attQuery).sort({ date: 1 });
+        const sessions = await Attendance.find(attQuery).sort({ date: 1 }).lean();
         const totalSessionsCount = sessions.length;
         let classTotalPresent = 0;
         let classTotalLate = 0;
@@ -570,12 +571,12 @@ exports.getClassroomAnalytics = async (req, res) => {
             if (endFilter) taskQuery.dueDate.$lte = endFilter;
         }
 
-        const classTasks = await Task.find(taskQuery).select("title dueDate maxMarks topic taskType assignedTo");
+        const classTasks = await Task.find(taskQuery).select("title dueDate maxMarks topic taskType assignedTo").lean();
         const classTaskIds = classTasks.map(t => t._id);
 
         const allSubmissions = await Submission.find({
             taskId: { $in: classTaskIds }
-        }).populate("studentId", "fullname email").select("taskId studentId status marksAwarded grade submittedAt");
+        }).populate("studentId", "fullname email").select("taskId studentId status marksAwarded grade submittedAt").lean();
 
         const studentAssignmentMap = new Map();
         studentIds.forEach(id => {
@@ -637,13 +638,13 @@ exports.getClassroomAnalytics = async (req, res) => {
         // -----------------------------------------------------------
         // C. QUIZ & QUESTION ITEM ANALYSIS (Phase 3 Integration)
         // -----------------------------------------------------------
-        const quizzes = await Quiz.find({ roomId }).select("title deadline totalMarks passingMarks topic isPublished");
+        const quizzes = await Quiz.find({ roomId }).select("title deadline totalMarks passingMarks topic isPublished").lean();
         const quizIds = quizzes.map(q => q._id);
 
         const allAttempts = await Attempt.find({
             quizId: { $in: quizIds },
             status: { $in: ["submitted", "graded"] }
-        }).populate("studentId", "fullname email").select("quizId studentId score percentage answers isEvaluated");
+        }).populate("studentId", "fullname email").select("quizId studentId score percentage answers isEvaluated").lean();
 
         const studentQuizMap = new Map();
         studentIds.forEach(id => studentQuizMap.set(id.toString(), []));

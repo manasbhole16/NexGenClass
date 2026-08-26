@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { DndContext, DragOverlay, closestCorners, useSensor, useSensors, PointerSensor, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -8,28 +8,35 @@ import {
     MessageSquare, ClipboardList, LayoutDashboard, Award, BrainCircuit, BarChart2,
     Calendar, CheckCircle, FileText, Filter, ChevronDown, ChevronRight, Layers,
     BookOpen, CheckSquare, Paperclip, Clock, Sparkles, FileSpreadsheet, MoreVertical,
-    Edit2, ArrowUp, ArrowDown, Send, FolderPlus, X, Brain
+    Edit2, ArrowUp, ArrowDown, Send, FolderPlus, X, Brain, Video
 } from 'lucide-react';
 import TaskCard from '../components/board/TaskCard';
-import NewTaskModal from '../components/NewTaskModal';
-import AssignmentModal from '../components/AssignmentModal';
-import { io } from 'socket.io-client';
 import API_BASE_URL from '../apiConfig';
+import { useSocket } from '../context/SocketContext';
 import PresenceAvatars from '../components/board/PresenceAvatars';
 import RoomChat from '../components/board/RoomChat';
-import QuizModule from '../components/quiz/QuizModule';
-import FormModule from '../components/forms/FormModule';
-import ClassroomAnalytics from '../components/analytics/ClassroomAnalytics';
-
-// Google Classroom Core Experience Components
 import ClassStreamTab from '../components/classroom/ClassStreamTab';
-import ClassPeopleTab from '../components/classroom/ClassPeopleTab';
-import ClassGradesTab from '../components/classroom/ClassGradesTab';
-import ClassSettingsModal from '../components/classroom/ClassSettingsModal';
 import NotificationCenter from '../components/notifications/NotificationCenter';
-import ClassroomFilesTab from '../components/files/ClassroomFilesTab';
-import StudyAssistant from '../components/ai/StudyAssistant';
-import LiveClassroom from '../components/live/LiveClassroom';
+
+// Lazy-loaded heavy modules for progressive dashboard loading
+const QuizModule = lazy(() => import('../components/quiz/QuizModule'));
+const FormModule = lazy(() => import('../components/forms/FormModule'));
+const ClassroomAnalytics = lazy(() => import('../components/analytics/ClassroomAnalytics'));
+const ClassPeopleTab = lazy(() => import('../components/classroom/ClassPeopleTab'));
+const ClassGradesTab = lazy(() => import('../components/classroom/ClassGradesTab'));
+const ClassSettingsModal = lazy(() => import('../components/classroom/ClassSettingsModal'));
+const ClassroomFilesTab = lazy(() => import('../components/files/ClassroomFilesTab'));
+const StudyAssistant = lazy(() => import('../components/ai/StudyAssistant'));
+const LiveClassroom = lazy(() => import('../components/live/LiveClassroom'));
+const NewTaskModal = lazy(() => import('../components/NewTaskModal'));
+const AssignmentModal = lazy(() => import('../components/AssignmentModal'));
+
+const TabLoader = () => (
+    <div className="flex flex-col items-center justify-center py-24 space-y-3">
+        <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full" />
+        <span className="text-xs font-semibold text-gray-400">Loading module...</span>
+    </div>
+);
 
 const COLUMNS = [
     { id: 'Backlog', title: 'Backlog', color: 'bg-gray-500/20' },
@@ -74,7 +81,7 @@ const HomePage = ({ user, onLogout }) => {
     const [typingUser, setTypingUser] = useState(null);
     const [roomDetails, setRoomDetails] = useState(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [socket, setSocket] = useState(null);
+    const socket = useSocket();
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('stream'); // 'stream' | 'classwork' | 'people' | 'grades' | 'quizzes' | 'forms' | 'analytics'
     const [classworkView, setClassworkView] = useState('list'); // 'list' | 'kanban'
@@ -124,83 +131,75 @@ const HomePage = ({ user, onLogout }) => {
     };
 
     useEffect(() => {
-        fetchRoomDetails();
-        fetchTasks();
+        let isMounted = true;
 
-        const s = io(API_BASE_URL, {
-            withCredentials: true,
-            transports: ['polling', 'websocket']
-        });
-        setSocket(s);
+        const loadData = async () => {
+            try {
+                if (isPersonal) {
+                    const res = await fetch(`${API_BASE_URL}/api/tasks?roomId=${roomId}`, { credentials: 'include' });
+                    const data = await res.json();
+                    if (isMounted && data.success) setTasks(data.tasks || []);
+                } else {
+                    const [roomRes, tasksRes] = await Promise.all([
+                        fetch(`${API_BASE_URL}/api/rooms/${roomId}`, { credentials: 'include' }),
+                        fetch(`${API_BASE_URL}/api/tasks?roomId=${roomId}`, { credentials: 'include' })
+                    ]);
+                    const [roomData, tasksData] = await Promise.all([
+                        roomRes.json(),
+                        tasksRes.json()
+                    ]);
+                    if (isMounted) {
+                        if (roomData.success && roomData.room) setRoomDetails(roomData.room);
+                        if (tasksData.success && tasksData.tasks) setTasks(tasksData.tasks);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load classroom data in parallel", err);
+            }
+        };
+
+        loadData();
+
+        if (!socket) return;
 
         if (user && !isPersonal) {
-            s.emit('joinRoom', { roomId, user });
+            socket.emit('joinRoom', { roomId, user });
         }
 
-        s.on('presenceUpdate', (users) => {
-            setOnlineUsers(users);
-        });
-
-        s.on('userTyping', ({ user: tUser, isTyping }) => {
-            if (isTyping) setTypingUser(tUser);
-            else setTypingUser(null);
-        });
-
-        s.on('taskCreated', (newTask) => {
+        const handlePresence = (users) => setOnlineUsers(users);
+        const handleTypingEvt = ({ user: tUser, isTyping }) => setTypingUser(isTyping ? tUser : null);
+        const handleTaskCreated = (newTask) => {
             if (isPersonal && !newTask.room) setTasks(prev => [newTask, ...prev]);
             else if (newTask.room === roomId) setTasks(prev => [newTask, ...prev]);
-        });
-
-        s.on('taskUpdated', (updatedTask) => {
+        };
+        const handleTaskUpdated = (updatedTask) => {
             if (isPersonal && !updatedTask.room) setTasks(prev => prev.map(t => t._id === updatedTask._id ? updatedTask : t));
             else if (updatedTask.room === roomId) setTasks(prev => prev.map(t => t._id === updatedTask._id ? updatedTask : t));
-        });
-
-        s.on('taskDeleted', ({ id, roomId: taskRoomId }) => {
+        };
+        const handleTaskDeleted = ({ id, roomId: taskRoomId }) => {
             const match = isPersonal ? (taskRoomId === 'personal' || !taskRoomId) : taskRoomId === roomId;
             if (match) setTasks(prev => prev.filter(t => t._id !== id));
-        });
-
-        s.on('submissionUpdate', () => {
-            fetchTasks();
-        });
-
-        s.on('classroom_updated', (updatedRoom) => {
+        };
+        const handleSubmissionUpdate = () => fetchTasks();
+        const handleClassroomUpdated = (updatedRoom) => {
             if (updatedRoom._id === roomId) {
                 setRoomDetails(prev => ({ ...prev, ...updatedRoom }));
             }
-        });
-
-        s.on('topicRenamed', ({ oldName, newName }) => {
+        };
+        const handleTopicChanged = () => {
             fetchTasks();
             fetchRoomDetails();
-        });
-
-        s.on('topicDeleted', () => {
-            fetchTasks();
-            fetchRoomDetails();
-        });
-
-        s.on('classroom_settings_updated', (updatedRoom) => {
-            if (updatedRoom._id === roomId) {
-                setRoomDetails(prev => ({ ...prev, ...updatedRoom }));
-            }
-        });
-
-        s.on('classroom_deleted', ({ roomId: delId }) => {
+        };
+        const handleClassroomDeleted = ({ roomId: delId }) => {
             if (delId === roomId) {
                 alert("This classroom has been deleted by the instructor.");
                 navigate('/rooms');
             }
-        });
-
-        s.on('student_joined', (data) => {
-            if (data?.roomId === roomId || !data?.roomId) {
-                fetchRoomDetails();
-            }
-        });
-
-        s.on('student_removed', (data) => {
+        };
+        const handleStudentJoined = (data) => {
+            if (data?.roomId === roomId || !data?.roomId) fetchRoomDetails();
+        };
+        const handleStudentRemoved = (data) => {
             if (data?.roomId === roomId || !data?.roomId) {
                 if (data?.userId === user?._id) {
                     alert("You have been removed from this classroom.");
@@ -209,15 +208,42 @@ const HomePage = ({ user, onLogout }) => {
                     fetchRoomDetails();
                 }
             }
-        });
+        };
+
+        socket.on('presenceUpdate', handlePresence);
+        socket.on('userTyping', handleTypingEvt);
+        socket.on('taskCreated', handleTaskCreated);
+        socket.on('taskUpdated', handleTaskUpdated);
+        socket.on('taskDeleted', handleTaskDeleted);
+        socket.on('submissionUpdate', handleSubmissionUpdate);
+        socket.on('classroom_updated', handleClassroomUpdated);
+        socket.on('classroom_settings_updated', handleClassroomUpdated);
+        socket.on('topicRenamed', handleTopicChanged);
+        socket.on('topicDeleted', handleTopicChanged);
+        socket.on('classroom_deleted', handleClassroomDeleted);
+        socket.on('student_joined', handleStudentJoined);
+        socket.on('student_removed', handleStudentRemoved);
 
         return () => {
+            isMounted = false;
             if (user && !isPersonal) {
-                s.emit('leaveRoom', { roomId, user });
+                socket.emit('leaveRoom', { roomId, user });
             }
-            s.disconnect();
+            socket.off('presenceUpdate', handlePresence);
+            socket.off('userTyping', handleTypingEvt);
+            socket.off('taskCreated', handleTaskCreated);
+            socket.off('taskUpdated', handleTaskUpdated);
+            socket.off('taskDeleted', handleTaskDeleted);
+            socket.off('submissionUpdate', handleSubmissionUpdate);
+            socket.off('classroom_updated', handleClassroomUpdated);
+            socket.off('classroom_settings_updated', handleClassroomUpdated);
+            socket.off('topicRenamed', handleTopicChanged);
+            socket.off('topicDeleted', handleTopicChanged);
+            socket.off('classroom_deleted', handleClassroomDeleted);
+            socket.off('student_joined', handleStudentJoined);
+            socket.off('student_removed', handleStudentRemoved);
         };
-    }, [roomId, user]);
+    }, [roomId, user, socket]);
 
     const handleDragEnd = async (event) => {
         const { active, over } = event;
@@ -1102,97 +1128,125 @@ const HomePage = ({ user, onLogout }) => {
 
             {/* TAB 3: PEOPLE */}
             {activeTab === 'people' && !isPersonal && (
-                <ClassPeopleTab
-                    roomId={roomId}
-                    roomDetails={roomDetails}
-                    user={user}
-                    onMemberUpdated={fetchRoomDetails}
-                    onUnenrolled={() => navigate('/rooms')}
-                />
+                <Suspense fallback={<TabLoader />}>
+                    <ClassPeopleTab
+                        roomId={roomId}
+                        roomDetails={roomDetails}
+                        user={user}
+                        onMemberUpdated={fetchRoomDetails}
+                        onUnenrolled={() => navigate('/rooms')}
+                    />
+                </Suspense>
             )}
 
             {/* TAB 4: GRADES */}
             {activeTab === 'grades' && (
-                <ClassGradesTab
-                    roomId={roomId}
-                    roomDetails={roomDetails}
-                    user={user}
-                    tasks={tasks}
-                    onOpenAssignment={(task) => setSelectedAssignment(task)}
-                />
+                <Suspense fallback={<TabLoader />}>
+                    <ClassGradesTab
+                        roomId={roomId}
+                        roomDetails={roomDetails}
+                        user={user}
+                        tasks={tasks}
+                        onOpenAssignment={(task) => setSelectedAssignment(task)}
+                    />
+                </Suspense>
             )}
 
             {/* TAB 5: QUIZZES */}
             {activeTab === 'quizzes' && (
-                <div className="max-w-5xl mx-auto">
-                    <QuizModule roomId={isPersonal ? 'personal' : roomId} user={user} />
-                </div>
+                <Suspense fallback={<TabLoader />}>
+                    <div className="max-w-5xl mx-auto">
+                        <QuizModule roomId={isPersonal ? 'personal' : roomId} user={user} />
+                    </div>
+                </Suspense>
             )}
 
             {/* TAB 6: GOOGLE FORMS 1.0 */}
             {activeTab === 'forms' && (
-                <div className="max-w-5xl mx-auto">
-                    <FormModule roomId={isPersonal ? 'personal' : roomId} user={user} roomDetails={roomDetails} />
-                </div>
+                <Suspense fallback={<TabLoader />}>
+                    <div className="max-w-5xl mx-auto">
+                        <FormModule roomId={isPersonal ? 'personal' : roomId} user={user} roomDetails={roomDetails} />
+                    </div>
+                </Suspense>
             )}
 
             {/* TAB 7: RESOURCES / GOOGLE DRIVE-STYLE FILES */}
             {activeTab === 'resources' && !isPersonal && (
-                <div className="max-w-5xl mx-auto">
-                    <ClassroomFilesTab roomId={roomId} isTeacher={isTeacher} user={user} />
-                </div>
+                <Suspense fallback={<TabLoader />}>
+                    <div className="max-w-5xl mx-auto">
+                        <ClassroomFilesTab roomId={roomId} isTeacher={isTeacher} user={user} />
+                    </div>
+                </Suspense>
             )}
 
             {/* TAB 8: ANALYTICS */}
             {activeTab === 'analytics' && (
-                <div className="max-w-5xl mx-auto">
-                    <ClassroomAnalytics roomId={roomId} />
-                </div>
+                <Suspense fallback={<TabLoader />}>
+                    <div className="max-w-5xl mx-auto">
+                        <ClassroomAnalytics roomId={roomId} />
+                    </div>
+                </Suspense>
             )}
 
             {/* TAB 9: LIVE CLASSROOM & WHITEBOARD 2.0 */}
             {activeTab === 'live' && !isPersonal && (
-                <div className="max-w-6xl mx-auto h-[750px]">
-                    <LiveClassroom roomId={roomId} user={user} isTeacher={isTeacher} />
-                </div>
+                <Suspense fallback={<TabLoader />}>
+                    <div className="max-w-6xl mx-auto h-[750px]">
+                        <LiveClassroom roomId={roomId} user={user} isTeacher={isTeacher} />
+                    </div>
+                </Suspense>
             )}
 
             {/* TAB 10: AI ACADEMIC COPILOT & STUDY ASSISTANT */}
             {activeTab === 'ai' && (
-                <div className="max-w-5xl mx-auto h-[750px]">
-                    <StudyAssistant roomId={roomId} user={user} />
-                </div>
+                <Suspense fallback={<TabLoader />}>
+                    <div className="max-w-5xl mx-auto h-[750px]">
+                        <StudyAssistant roomId={roomId} user={user} />
+                    </div>
+                </Suspense>
             )}
 
             {/* Modals */}
-            <NewTaskModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSave={handleCreateTask}
-                onTyping={handleTyping}
-                roomId={isPersonal ? 'personal' : roomId}
-                roomDetails={roomDetails}
-                existingTopics={allTopics}
-                initialTaskType={modalTaskType}
-                initialTopic={modalInitialTopic}
-            />
+            <Suspense fallback={null}>
+                {isModalOpen && (
+                    <NewTaskModal
+                        isOpen={isModalOpen}
+                        onClose={() => setIsModalOpen(false)}
+                        onSave={handleCreateTask}
+                        onTyping={handleTyping}
+                        roomId={isPersonal ? 'personal' : roomId}
+                        roomDetails={roomDetails}
+                        existingTopics={allTopics}
+                        initialTaskType={modalTaskType}
+                        initialTopic={modalInitialTopic}
+                    />
+                )}
+            </Suspense>
 
-            <AssignmentModal
-                isOpen={!!selectedAssignment}
-                onClose={() => setSelectedAssignment(null)}
-                task={selectedAssignment}
-                user={user}
-                roomDetails={roomDetails}
-                onUpdate={fetchTasks}
-                onDelete={fetchTasks}
-            />
+            <Suspense fallback={null}>
+                {selectedAssignment && (
+                    <AssignmentModal
+                        isOpen={!!selectedAssignment}
+                        onClose={() => setSelectedAssignment(null)}
+                        task={selectedAssignment}
+                        user={user}
+                        roomDetails={roomDetails}
+                        onUpdate={fetchTasks}
+                        onDelete={fetchTasks}
+                    />
+                )}
+            </Suspense>
 
-            <ClassSettingsModal
-                isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
-                roomId={roomId}
-                onSettingsSaved={(updated) => setRoomDetails(updated)}
-            />
+            <Suspense fallback={null}>
+                {isSettingsOpen && (
+                    <ClassSettingsModal
+                        isOpen={isSettingsOpen}
+                        onClose={() => setIsSettingsOpen(false)}
+                        roomId={roomId}
+                        onSettingsSaved={(updated) => setRoomDetails(updated)}
+                    />
+                )}
+            </Suspense>
 
             {/* Create Topic Modal */}
             <AnimatePresence>

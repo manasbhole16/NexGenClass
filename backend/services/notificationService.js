@@ -242,7 +242,8 @@ class NotificationService {
                 .populate("roomId", "name code section")
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(parsedLimit),
+                .limit(parsedLimit)
+                .lean(),
             Notification.countDocuments(query),
             Notification.countDocuments({ recipient: userId, isRead: false })
         ]);

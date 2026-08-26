@@ -1,34 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Home, Calendar, CheckSquare, GraduationCap, ClipboardCheck, Bell, ChevronDown, ChevronRight, BookOpen, Layers, MessageSquare } from 'lucide-react';
-import API_BASE_URL from '../../apiConfig';
 import ThemeToggle from '../ThemeToggle';
+import { useRooms } from '../../context/RoomsContext';
 
 const Sidebar = ({ user }) => {
-    const [rooms, setRooms] = useState([]);
+    const { rooms } = useRooms();
     const [isTeachingOpen, setIsTeachingOpen] = useState(true);
     const [isEnrolledOpen, setIsEnrolledOpen] = useState(true);
     const location = useLocation();
 
     const isTeacher = user?.role === 'teacher';
-
-    useEffect(() => {
-        if (user) {
-            fetchRooms();
-        }
-    }, [user]);
-
-    const fetchRooms = async () => {
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/rooms/my-rooms`, { credentials: 'include' });
-            const data = await res.json();
-            if (data.success) {
-                setRooms(data.rooms || []);
-            }
-        } catch (err) {
-            console.error("Failed to fetch rooms for sidebar", err);
-        }
-    };
 
     const teachingRooms = rooms.filter(r => (r.owner?._id || r.owner) === user?._id);
     const enrolledRooms = rooms.filter(r => (r.owner?._id || r.owner) !== user?._id);

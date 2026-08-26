@@ -27,34 +27,32 @@ import {
     RefreshCw
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 const NotificationsPage = ({ user }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [searchParams, setSearchParams] = useSearchParams();
-    
-    const [mainTab, setMainTab] = useState(searchParams.get('tab') || 'activity'); // 'activity' | 'preferences'
     const [activeFilter, setActiveFilter] = useState('all');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedType, setSelectedType] = useState('all');
+    const [selectedPriority, setSelectedPriority] = useState('all');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-
-    // Preferences state
-    const [preferences, setPreferences] = useState({
-        assignmentNotifications: true,
-        quizNotifications: true,
-        attendanceNotifications: true,
-        calendarNotifications: true,
-        liveClassNotifications: true,
-        analyticsNotifications: true,
-        inAppNotifications: true
-    });
+    const [totalCount, setTotalCount] = useState(0);
+    const [preferences, setPreferences] = useState(null);
     const [savingPrefs, setSavingPrefs] = useState(false);
-    const [prefsSavedMessage, setPrefsSavedMessage] = useState(false);
-
+    const [prefSuccess, setPrefSuccess] = useState(false);
+    const [mainTab, setMainTab] = useState('activity'); // 'activity' | 'preferences'
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const socket = useSocket();
+
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        if (tabParam === 'preferences') {
+            setMainTab('preferences');
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         if (mainTab === 'activity') {
@@ -66,25 +64,27 @@ const NotificationsPage = ({ user }) => {
 
     // Real-time Socket Listener
     useEffect(() => {
-        if (!user?._id) return;
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-        socket.emit("joinUser", { userId: user._id });
+        if (!socket) return;
 
-        socket.on("notification:new", (newNotif) => {
+        const handleNewNotification = (newNotif) => {
             setNotifications(prev => [newNotif, ...prev.filter(n => n._id !== newNotif._id)]);
             setUnreadCount(prev => prev + 1);
-        });
+        };
 
-        socket.on("notification:unread_count", ({ unreadCount: newCount }) => {
+        const handleUnreadCount = ({ unreadCount: newCount }) => {
             if (typeof newCount === 'number') {
                 setUnreadCount(newCount);
             }
-        });
+        };
+
+        socket.on("notification:new", handleNewNotification);
+        socket.on("notification:unread_count", handleUnreadCount);
 
         return () => {
-            socket.disconnect();
+            socket.off("notification:new", handleNewNotification);
+            socket.off("notification:unread_count", handleUnreadCount);
         };
-    }, [user?._id]);
+    }, [socket]);
 
     const fetchNotifications = async (targetPage = 1) => {
         try {

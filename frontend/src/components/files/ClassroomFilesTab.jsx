@@ -33,7 +33,7 @@ import API_BASE_URL from '../../apiConfig';
 import FilePreviewModal from './FilePreviewModal';
 import FileDetailsPanel from './FileDetailsPanel';
 import DocumentSummaryPanel from '../ai/DocumentSummaryPanel';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
     const [files, setFiles] = useState([]);
@@ -64,6 +64,8 @@ const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
     const [linkTitle, setLinkTitle] = useState('');
     const [linkUrl, setLinkUrl] = useState('');
 
+    const socket = useSocket();
+
     useEffect(() => {
         if (roomId) {
             fetchFiles();
@@ -72,32 +74,36 @@ const ClassroomFilesTab = ({ roomId, isTeacher, user }) => {
 
     // Real-time Socket.IO Listeners
     useEffect(() => {
-        if (!roomId) return;
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
-        socket.emit("joinRoom", { roomId, user });
+        if (!socket || !roomId) return;
 
-        socket.on("file:uploaded", ({ files: newFiles }) => {
+        const handleFileUploaded = ({ files: newFiles }) => {
             if (Array.isArray(newFiles)) {
                 setFiles(prev => [...newFiles, ...prev.filter(f => !newFiles.some(nf => nf._id === f._id))]);
             }
-        });
+        };
 
-        socket.on("file:updated", ({ file: updatedFile }) => {
+        const handleFileUpdated = ({ file: updatedFile }) => {
             if (updatedFile) {
                 setFiles(prev => prev.map(f => f._id === updatedFile._id ? updatedFile : f));
             }
-        });
+        };
 
-        socket.on("file:deleted", ({ fileId }) => {
+        const handleFileDeleted = ({ fileId }) => {
             if (fileId) {
                 setFiles(prev => prev.filter(f => f._id !== fileId));
             }
-        });
+        };
+
+        socket.on("file:uploaded", handleFileUploaded);
+        socket.on("file:updated", handleFileUpdated);
+        socket.on("file:deleted", handleFileDeleted);
 
         return () => {
-            socket.disconnect();
+            socket.off("file:uploaded", handleFileUploaded);
+            socket.off("file:updated", handleFileUpdated);
+            socket.off("file:deleted", handleFileDeleted);
         };
-    }, [roomId, user?._id]);
+    }, [socket, roomId]);
 
     const fetchFiles = async () => {
         try {

@@ -17,12 +17,13 @@ import {
     ShieldAlert
 } from 'lucide-react';
 import API_BASE_URL from '../../apiConfig';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../context/SocketContext';
 
 const StudentGlobalAnalytics = ({ rooms = [] }) => {
     const [loading, setLoading] = useState(true);
     const [analytics, setAnalytics] = useState(null);
     const [selectedRoom, setSelectedRoom] = useState('all');
+    const socket = useSocket();
 
     const fetchStudentAnalytics = async () => {
         try {
@@ -48,7 +49,7 @@ const StudentGlobalAnalytics = ({ rooms = [] }) => {
 
     // Socket.IO Real-time Sync
     useEffect(() => {
-        const socket = io(API_BASE_URL.replace('/api', ''), { withCredentials: true });
+        if (!socket) return;
         
         const handleUpdate = () => {
             fetchStudentAnalytics();
@@ -61,9 +62,13 @@ const StudentGlobalAnalytics = ({ rooms = [] }) => {
         socket.on('quizCreated', handleUpdate);
 
         return () => {
-            socket.disconnect();
+            socket.off('taskCreated', handleUpdate);
+            socket.off('taskUpdated', handleUpdate);
+            socket.off('submissionCreated', handleUpdate);
+            socket.off('attendance_updated', handleUpdate);
+            socket.off('quizCreated', handleUpdate);
         };
-    }, []);
+    }, [socket]);
 
     if (loading) {
         return (
