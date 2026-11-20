@@ -1,5 +1,6 @@
 const User = require("../models/user-model");
 const bcrypt = require("bcrypt");
+const notificationService = require("../services/notificationService");
 const jwt = require("jsonwebtoken");
 
 const generateToken = (user) => {
@@ -51,6 +52,18 @@ module.exports.registerUser = async (req, res) => {
 
         const user = await User.create({ fullname, email, password: hash, role: role || 'student' });
         sendToken(user, 201, res);
+
+        // Welcome notification (in-app + email). Queued in the background; never affects the response.
+        notificationService.createNotification({
+            recipient: user._id,
+            type: "account_welcome",
+            title: "Welcome to NexGenClass",
+            message: `Your ${user.role} account is ready. Join or create a classroom to get started.`,
+            priority: "normal",
+            entityType: "system",
+            actionUrl: "/rooms",
+            dedupKey: `welcome:${user._id}`
+        }).catch(() => {});
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

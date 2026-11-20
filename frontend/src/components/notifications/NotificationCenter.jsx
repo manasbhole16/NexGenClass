@@ -61,12 +61,25 @@ const NotificationCenter = ({ user }) => {
             }
         };
 
+        const handleRead = ({ id }) => setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+        const handleReadAll = () => setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        const handleDeleted = ({ id, scope }) => setNotifications(prev =>
+            scope === 'all' ? [] : scope === 'read' ? prev.filter(n => !n.isRead) : prev.filter(n => n._id !== id));
+
         socket.on("notification:new", handleNewNotification);
+        socket.on("notification:count-updated", handleUnreadCount);
         socket.on("notification:unread_count", handleUnreadCount);
+        socket.on("notification:read", handleRead);
+        socket.on("notification:read-all", handleReadAll);
+        socket.on("notification:deleted", handleDeleted);
 
         return () => {
             socket.off("notification:new", handleNewNotification);
+            socket.off("notification:count-updated", handleUnreadCount);
             socket.off("notification:unread_count", handleUnreadCount);
+            socket.off("notification:read", handleRead);
+            socket.off("notification:read-all", handleReadAll);
+            socket.off("notification:deleted", handleDeleted);
         };
     }, [socket]);
 

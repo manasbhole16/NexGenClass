@@ -41,9 +41,13 @@ const NotificationsPage = ({ user }) => {
     const [totalCount, setTotalCount] = useState(0);
     const [preferences, setPreferences] = useState(null);
     const [savingPrefs, setSavingPrefs] = useState(false);
-    const [prefSuccess, setPrefSuccess] = useState(false);
+    const [prefsSavedMessage, setPrefsSavedMessage] = useState(false);
+    const [prefsError, setPrefsError] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [phone, setPhone] = useState('');
+    const [channelAvailability, setChannelAvailability] = useState({ email: false, sms: false });
     const [mainTab, setMainTab] = useState('activity'); // 'activity' | 'preferences'
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const socket = useSocket();
 
@@ -77,12 +81,25 @@ const NotificationsPage = ({ user }) => {
             }
         };
 
+        const handleRead = ({ id }) => setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n));
+        const handleReadAll = () => setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        const handleDeleted = ({ id, scope }) => setNotifications(prev =>
+            scope === 'all' ? [] : scope === 'read' ? prev.filter(n => !n.isRead) : prev.filter(n => n._id !== id));
+
         socket.on("notification:new", handleNewNotification);
+        socket.on("notification:count-updated", handleUnreadCount);
         socket.on("notification:unread_count", handleUnreadCount);
+        socket.on("notification:read", handleRead);
+        socket.on("notification:read-all", handleReadAll);
+        socket.on("notification:deleted", handleDeleted);
 
         return () => {
             socket.off("notification:new", handleNewNotification);
+            socket.off("notification:count-updated", handleUnreadCount);
             socket.off("notification:unread_count", handleUnreadCount);
+            socket.off("notification:read", handleRead);
+            socket.off("notification:read-all", handleReadAll);
+            socket.off("notification:deleted", handleDeleted);
         };
     }, [socket]);
 
@@ -114,6 +131,8 @@ const NotificationsPage = ({ user }) => {
             const data = await res.json();
             if (data.success && data.preferences) {
                 setPreferences(data.preferences);
+                setPhone(data.phone || '');
+                setChannelAvailability(data.channelAvailability || { email: false, sms: false });
             }
         } catch (err) {
             console.error("Failed to load preferences", err);
@@ -126,11 +145,13 @@ const NotificationsPage = ({ user }) => {
             const res = await fetch(`${API_BASE_URL}/api/notifications/preferences`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(preferences),
+                body: JSON.stringify({ preferences, phone: phone.trim() || null }),
                 credentials: 'include'
             });
             const data = await res.json();
+            setPrefsError(data.success ? '' : (data.message || 'Could not save preferences'));
             if (data.success) {
+                if (data.phone !== undefined) setPhone(data.phone || '');
                 setPrefsSavedMessage(true);
                 setTimeout(() => setPrefsSavedMessage(false), 3000);
             }
@@ -183,6 +204,16 @@ const NotificationsPage = ({ user }) => {
             if (res.ok) {
                 setNotifications(prev => prev.filter(n => !n.isRead));
             }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleClearAll = async () => {
+        if (!window.confirm("Delete ALL notifications? This cannot be undone.")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/notifications/clear-all`, { method: 'DELETE', credentials: 'include' });
+            if (res.ok) { setNotifications([]); setUnreadCount(0); }
         } catch (err) {
             console.error(err);
         }
@@ -367,6 +398,12 @@ const NotificationsPage = ({ user }) => {
                             >
                                 <Trash2 className="w-4 h-4" /> Clear Read
                             </button>
+                            <button
+                                onClick={handleClearAll}
+                                className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-500/10 hover:text-red-500 text-slate-600 dark:text-slate-400 font-bold text-xs rounded-xl transition-all shadow-sm"
+                            >
+                                <Trash2 className="w-4 h-4" /> Clear All
+                            </button>
                         </>
                     )}
                 </div>
@@ -525,7 +562,10 @@ const NotificationsPage = ({ user }) => {
             )}
 
             {/* TAB 2: NOTIFICATION PREFERENCES */}
-            {mainTab === 'preferences' && (
+            {mainTab === 'preferences' && !preferences && (
+                <div className="py-24 text-center text-xs text-slate-400 font-medium">Loading preferences...</div>
+            )}
+            {mainTab === 'preferences' && preferences && (
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 space-y-6 shadow-sm">
                     <div>
                         <h2 className="text-lg font-black text-slate-900 dark:text-white">Notification Preferences</h2>
@@ -617,6 +657,53 @@ const NotificationsPage = ({ user }) => {
                             />
                         </div>
 
+                        {/* Delivery channels & extra categories */}
+                        <div className="flex items-center justify-between pt-4">
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white">Email Notifications</h4>
+                                <p className="text-slate-400 text-[11px]">
+                                    Receive important alerts by email.{!channelAvailability.email && ' (Email delivery is not configured on this server yet.)'}
+                                </p>
+                            </div>
+                            <input type="checkbox" aria-label="Email notifications" checked={!!preferences.emailNotifications}
+                                onChange={(e) => setPreferences({ ...preferences, emailNotifications: e.target.checked })}
+                                className="w-4 h-4 accent-pink-600 rounded cursor-pointer" />
+                        </div>
+                        <div className="pt-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-slate-900 dark:text-white">SMS Alerts</h4>
+                                    <p className="text-slate-400 text-[11px]">
+                                        Urgent reminders by text message. Requires a phone number.{!channelAvailability.sms && ' (SMS gateway is not configured on this server yet.)'}
+                                    </p>
+                                </div>
+                                <input type="checkbox" aria-label="SMS notifications" checked={!!preferences.smsNotifications}
+                                    onChange={(e) => setPreferences({ ...preferences, smsNotifications: e.target.checked })}
+                                    className="w-4 h-4 accent-pink-600 rounded cursor-pointer" />
+                            </div>
+                            <input type="tel" inputMode="tel" aria-label="Mobile number" placeholder="Mobile number (e.g. 9876543210)" value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                                className="w-full sm:w-72 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-xs" />
+                        </div>
+                        <div className="flex items-center justify-between pt-4">
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white">Announcements & Class Updates</h4>
+                                <p className="text-slate-400 text-[11px]">New and edited announcements and classroom changes.</p>
+                            </div>
+                            <input type="checkbox" aria-label="Announcement notifications" checked={!!preferences.announcementNotifications}
+                                onChange={(e) => setPreferences({ ...preferences, announcementNotifications: e.target.checked })}
+                                className="w-4 h-4 accent-pink-600 rounded cursor-pointer" />
+                        </div>
+                        <div className="flex items-center justify-between pt-4">
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white">Urgent Alerts</h4>
+                                <p className="text-slate-400 text-[11px]">Always deliver urgent items, even if their category is muted. Security alerts are never muted.</p>
+                            </div>
+                            <input type="checkbox" aria-label="Urgent alerts" checked={preferences.urgentAlerts !== false}
+                                onChange={(e) => setPreferences({ ...preferences, urgentAlerts: e.target.checked })}
+                                className="w-4 h-4 accent-pink-600 rounded cursor-pointer" />
+                        </div>
+
                         {/* Option 7: Analytics Alerts */}
                         <div className="flex items-center justify-between pt-4">
                             <div>
@@ -633,6 +720,9 @@ const NotificationsPage = ({ user }) => {
                     </div>
 
                     <div className="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-800">
+                        {prefsError && (
+                            <span role="alert" className="text-xs font-bold text-rose-600">{prefsError}</span>
+                        )}
                         {prefsSavedMessage && (
                             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                 <Check className="w-4 h-4" /> Preferences saved successfully!

@@ -23,7 +23,10 @@ const fileRoutes = require("./routes/fileRouter");
 const aiRoutes = require("./routes/aiRouter");
 const plagiarismRoutes = require("./routes/plagiarismRouter");
 const ChatMessage = require("./models/chatMessage-model");
-const { startTaskReminderJob } = require("./jobs/taskReminderJob");
+const { startReminderJobs } = require("./jobs/reminderJobs");
+const jwt = require("jsonwebtoken");
+const User = require("./models/user-model");
+const cookie = require("cookie");
 
 const app = express();
 const server = http.createServer(app);
@@ -44,6 +47,7 @@ const ORIGIN = [
         "https://nex-gen-class.vercel.app",
         "https://nexgenback-gamma.vercel.app",
         "https://nexgen-backend-seven.vercel.app",
+        "https://nexgenclass.onrender.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:5174",
@@ -59,6 +63,24 @@ const io = new Server(server, {
         origin: ORIGIN,
         credentials: true
     }
+});
+
+// Socket authentication: verify the same JWT used by the REST API (httpOnly cookie, or handshake auth token).
+// Connections without a valid token are still allowed for legacy public features, but they can never
+// join a private user room, so notifications are only ever delivered to the authenticated owner.
+io.use(async (socket, next) => {
+    try {
+        let token = socket.handshake.auth && socket.handshake.auth.token;
+        if (!token && socket.handshake.headers.cookie) {
+            token = cookie.parse(socket.handshake.headers.cookie).token;
+        }
+        if (token) {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || "secretKey");
+            const user = await User.findById(decoded.id).select("_id");
+            if (user) socket.data.userId = user._id.toString();
+        }
+    } catch (e) { /* unauthenticated socket */ }
+    next();
 });
 
 // Database Connection Middleware for Serverless / Monolith
@@ -143,6 +165,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/assessments", assessmentRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/notification-preferences", (req, res, next) => { req.url = "/preferences" + (req.url === "/" ? "" : req.url); notificationRoutes(req, res, next); });
 app.use("/api/live-sessions", liveSessionRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/files", fileRoutes);
@@ -155,10 +178,17 @@ const usersInRooms = {}; // { roomId: [ { userId, fullname, socketId } ] }
 io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
 
+    // Authenticated sockets are placed in their private room automatically (also after every reconnect).
+    if (socket.data.userId) {
+        socket.join(`user_${socket.data.userId}`);
+        socket.join(socket.data.userId);
+    }
+
     // Private user notifications channel
-    socket.on("joinUser", ({ userId }) => {
+    socket.on("joinUser", ({ userId } = {}) => {
         if (!userId) return;
         const uId = userId.toString();
+        if (uId !== socket.data.userId) return; // never join someone else's private channel
         socket.join(uId);
         socket.join(`user_${uId}`);
         console.log(`Socket ${socket.id} joined private channel user_${uId}`);
@@ -169,8 +199,8 @@ io.on("connection", (socket) => {
 
         socket.join(roomId);
 
-        // Auto-join user room as well
-        if (user._id) {
+        // Auto-join user room as well (only for the authenticated owner)
+        if (user._id && user._id.toString() === socket.data.userId) {
             const uId = user._id.toString();
             socket.join(uId);
             socket.join(`user_${uId}`);
@@ -328,6 +358,7 @@ const PORT = process.env.PORT || 3000;
 if (!process.env.VERCEL) {
     server.listen(PORT, () => {
         console.log(`NexGen Backend running on port ${PORT}`);
+        startReminderJobs(io);
     });
 }
 

@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const API_HOST = '127.0.0.1';
 const API_PORT = 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/nexgenclass';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/manas-nexgen';
 
 function makeRequest({ path, method = 'GET', body = null, cookie = null }) {
     return new Promise((resolve, reject) => {

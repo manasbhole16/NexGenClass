@@ -23,7 +23,7 @@ const connectDB = async () => {
         const opts = {
             bufferCommands: false,
             serverSelectionTimeoutMS: 8000,
-            dbName: 'nexgenclass',
+            dbName: process.env.MONGO_DB_NAME || 'manas-nexgen',
         };
 
         cached.promise = mongoose.connect(mongoUri, opts).then((mongoose) => {

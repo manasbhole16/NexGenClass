@@ -118,6 +118,17 @@ module.exports.updateAnnouncement = async (req, res) => {
             req.io.to(roomId).emit("announcement_updated", populatedAnnouncement);
         }
 
+        const stamp = Math.floor(Date.now() / 60000);
+        notificationService.createManyNotifications(
+            (room.members || []).filter((m) => m.toString() !== req.user._id.toString()).map((m) => ({
+                recipient: m, actor: req.user._id, type: "announcement_updated",
+                title: "Announcement Updated",
+                message: `An announcement in "${room.name}" was edited by ${req.user.fullname}.`,
+                entityType: "announcement", entityId: announcement._id, roomId: room._id,
+                actionUrl: `/room/${room._id}?tab=stream`,
+                dedupKey: `ann_upd:${announcement._id}:${m}:${stamp}`
+            })), req.io).catch((e) => console.error("Announcement update notify error:", e.message));
+
         res.json({ success: true, announcement: populatedAnnouncement });
     } catch (err) {
         res.status(500).json({ message: err.message });

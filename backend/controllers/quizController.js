@@ -164,6 +164,9 @@ module.exports.updateQuiz = async (req, res) => {
             safeMode, scheduledAt, isPublished
         } = req.body;
 
+        const prevStart = quiz.startDate ? quiz.startDate.getTime() : null;
+        const prevDeadline = quiz.deadline ? quiz.deadline.getTime() : null;
+
         if (title !== undefined) quiz.title = title.trim();
         if (description !== undefined) quiz.description = description.trim();
         if (timeLimit !== undefined) quiz.timeLimit = Math.max(1, Number(timeLimit));
@@ -203,6 +206,26 @@ module.exports.updateQuiz = async (req, res) => {
 
         if (req.io) {
             req.io.to(quiz.roomId.toString()).emit("quizUpdated", quiz);
+        }
+
+        // Schedule change on a live quiz -> notify enrolled students
+        const scheduleChanged = (quiz.startDate ? quiz.startDate.getTime() : null) !== prevStart ||
+            (quiz.deadline ? quiz.deadline.getTime() : null) !== prevDeadline;
+        if (scheduleChanged && quiz.isPublished) {
+            Room.findById(quiz.roomId).select("name members").then((room) => {
+                if (!room) return;
+                const stamp = Math.floor(Date.now() / 60000);
+                return notificationService.createManyNotifications(
+                    (room.members || []).filter((m) => m.toString() !== req.user._id.toString()).map((m) => ({
+                        recipient: m, actor: req.user._id, type: "quiz_schedule_changed", priority: "high",
+                        title: "Quiz Schedule Changed",
+                        message: `The schedule for quiz "${quiz.title}" in "${room.name}" was updated.`,
+                        entityType: "quiz", entityId: quiz._id, roomId: room._id,
+                        actionUrl: `/room/${room._id}?tab=quizzes`,
+                        metadata: { quizId: quiz._id, startsAt: quiz.startDate, deadline: quiz.deadline },
+                        dedupKey: `quiz_sched:${quiz._id}:${m}:${stamp}`
+                    })), req.io);
+            }).catch((e) => console.error("Quiz schedule notify error:", e.message));
         }
 
         res.json({ success: true, quiz });
@@ -1291,8 +1314,12 @@ module.exports.generateQuizQuestions = async (req, res) => {
 module.exports.getComprehensiveQuizAnalytics = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: "Invalid Quiz ID" });
         const quiz = await Quiz.findById(id);
         if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+
+        const authorized = await isAuthorizedTeacher(req.user, quiz.roomId, quiz.createdBy);
+        if (!authorized) return res.status(403).json({ message: "Only the classroom instructor can view quiz analytics." });
 
         const attempts = await Attempt.find({ quizId: id, status: { $ne: 'in_progress' } }).populate('studentId', 'fullname email');
         const questions = await Question.find({ quizId: id }).sort({ order: 1 });

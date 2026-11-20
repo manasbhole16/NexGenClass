@@ -121,6 +121,12 @@ exports.markAttendance = async (req, res) => {
             }
         }
 
+        // Low-attendance alerts (deduped weekly per student) + teacher summary, off the request path
+        require("../services/attendanceAlerts").checkLowAttendance({
+            roomId, session, studentIds: sanitizedRecords.map(r => r.student),
+            teacherId: req.user._id, roomName: (await Room.findById(roomId).select("name"))?.name || "your class", io: req.io
+        }).catch((e) => console.error("Low attendance check error:", e.message));
+
         res.status(200).json({ 
             success: true, 
             message: "Attendance saved successfully", 

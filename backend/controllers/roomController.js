@@ -182,6 +182,7 @@ module.exports.updateRoom = async (req, res) => {
         }
 
         const { name, section, subject, room: roomVenue, description, banner, archived } = req.body;
+        const infoBefore = [room.name, room.section, room.subject, room.room, room.description].join("|");
         if (name) room.name = name.trim();
         if (section !== undefined) room.section = section.trim();
         if (subject !== undefined) room.subject = subject.trim();
@@ -198,6 +199,18 @@ module.exports.updateRoom = async (req, res) => {
 
         if (req.io) {
             req.io.to(roomId).emit("classroom_updated", updatedRoom);
+        }
+
+        if ([room.name, room.section, room.subject, room.room, room.description].join("|") !== infoBefore) {
+            const stamp = Math.floor(Date.now() / 60000);
+            notificationService.createManyNotifications(
+                (room.members || []).filter((m) => m.toString() !== req.user._id.toString()).map((m) => ({
+                    recipient: m, actor: req.user._id, type: "classroom_updated",
+                    title: "Class Details Updated",
+                    message: `Details for "${room.name}" were updated by your instructor.`,
+                    entityType: "room", entityId: room._id, roomId: room._id, actionUrl: `/room/${room._id}`,
+                    dedupKey: `room_upd:${room._id}:${m}:${stamp}`
+                })), req.io).catch((e) => console.error("Room update notify error:", e.message));
         }
 
         res.json({ success: true, room: updatedRoom });

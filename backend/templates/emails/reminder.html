@@ -1,0 +1,7 @@
+<p style="margin:0 0 4px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#db2777;">Reminder</p>
+<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#0f172a;">{{title}}</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.6;">Hi {{recipientName}},</p>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.6;">{{message}}</p>
+{{#if className}}<p style="margin:0 0 8px;font-size:14px;color:#475569;"><strong>Class:</strong> {{className}}</p>{{/if}}
+{{#if details}}<p style="margin:0 0 16px;font-size:14px;color:#475569;">{{details}}</p>{{/if}}
+{{#if actionUrl}}<p style="margin:24px 0 0;"><a href="{{actionUrl}}" style="display:inline-block;background:#db2777;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;">{{actionLabel}}</a></p>{{/if}}

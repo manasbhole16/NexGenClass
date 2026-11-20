@@ -1,5 +1,18 @@
 const mongoose = require("mongoose");
 
+function deliveryChannelSchema() {
+    return {
+        status: { type: String, enum: ["none", "queued", "sending", "sent", "delivered", "failed", "skipped"], default: "none" },
+        attempts: { type: Number, default: 0 },
+        nextAttemptAt: { type: Date, default: null },
+        lastAttemptAt: { type: Date, default: null },
+        sentAt: { type: Date, default: null },
+        deliveredAt: { type: Date, default: null },
+        messageId: { type: String, default: null },
+        error: { type: String, default: null }
+    };
+}
+
 const notificationSchema = new mongoose.Schema(
     {
         recipient: {
@@ -94,11 +107,40 @@ const notificationSchema = new mongoose.Schema(
                 "academic_attention",
                 "attendance_threshold",
                 "performance_change",
+                // Account
+                "account_welcome",
+                "account_updated",
+                "account_security",
+                // Schedule changes / extra reminders
+                "assignment_updated_deadline",
+                "quiz_updated",
+                "quiz_schedule_changed",
+                "quiz_starting_soon",
+                "attendance_low_threshold",
                 // System
                 "general",
                 "system"
             ],
             index: true
+        },
+        category: {
+            type: String,
+            enum: ["assignment", "quiz", "attendance", "announcement", "classroom", "calendar", "live_class", "analytics", "form", "account", "system"],
+            default: "system",
+            index: true
+        },
+        channels: {
+            type: [String],
+            enum: ["inApp", "email", "sms"],
+            default: ["inApp"]
+        },
+        // Independent per-channel delivery tracking.
+        // status: queued -> sending -> sent (provider accepted) -> delivered (provider-confirmed; in-app is delivered on persist)
+        //         failed (retries exhausted / permanent) | skipped (disabled, not configured, no address)
+        deliveryStatus: {
+            inApp: deliveryChannelSchema(),
+            email: deliveryChannelSchema(),
+            sms: deliveryChannelSchema()
         },
         title: {
             type: String,
@@ -178,7 +220,15 @@ const notificationSchema = new mongoose.Schema(
 notificationSchema.index({ recipient: 1, createdAt: -1 });
 notificationSchema.index({ recipient: 1, isRead: 1 });
 notificationSchema.index({ recipient: 1, type: 1 });
-notificationSchema.index({ recipient: 1, dedupKey: 1 });
 notificationSchema.index({ roomId: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, category: 1, createdAt: -1 });
+// Delivery worker lookups
+notificationSchema.index({ "deliveryStatus.email.status": 1, "deliveryStatus.email.nextAttemptAt": 1 });
+notificationSchema.index({ "deliveryStatus.sms.status": 1, "deliveryStatus.sms.nextAttemptAt": 1 });
+// Hard duplicate guard: one notification per (recipient, dedupKey)
+notificationSchema.index(
+    { recipient: 1, dedupKey: 1 },
+    { unique: true, partialFilterExpression: { dedupKey: { $type: "string" } }, name: "recipient_dedupKey_unique" }
+);
 
 module.exports = mongoose.model("Notification", notificationSchema);

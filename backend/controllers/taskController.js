@@ -275,6 +275,11 @@ module.exports.updateTask = async (req, res) => {
             }
         }
 
+        const previousDue = task.dueDate ? task.dueDate.getTime() : null;
+        const previousDescription = task.description || "";
+        const previousTitle = task.title;
+        const wasPublished = !task.isDraft;
+
         const updatedTask = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
         if (req.io) {
@@ -319,6 +324,36 @@ module.exports.updateTask = async (req, res) => {
                     }));
                     await notificationService.createManyNotifications(notifs, req.io);
                 }
+            }
+        }
+
+        // Deadline / instructions changed on an already-published classroom assignment
+        if (wasPublished && !isPublishingDraft && updatedTask.room) {
+            const newDue = updatedTask.dueDate ? updatedTask.dueDate.getTime() : null;
+            const dueChanged = newDue !== previousDue;
+            const textChanged = (updatedTask.description || "") !== previousDescription || updatedTask.title !== previousTitle;
+            if (dueChanged || textChanged) {
+                Room.findById(updatedTask.room).select("name members owner").then((room) => {
+                    if (!room) return;
+                    const targets = (Array.isArray(updatedTask.assignedTo) && updatedTask.assignedTo.length > 0
+                        ? updatedTask.assignedTo : room.members || [])
+                        .map(String).filter((id) => id !== req.user._id.toString());
+                    const stamp = Date.now();
+                    return notificationService.createManyNotifications(targets.map((recipientId) => ({
+                        recipient: recipientId,
+                        actor: req.user._id,
+                        type: dueChanged ? "assignment_updated_deadline" : "assignment_updated",
+                        title: dueChanged ? "Assignment Deadline Changed" : "Assignment Updated",
+                        message: dueChanged
+                            ? `The deadline for "${updatedTask.title}" in "${room.name}" was changed.`
+                            : `Instructions for "${updatedTask.title}" in "${room.name}" were updated.`,
+                        priority: dueChanged ? "high" : "normal",
+                        entityType: "task", entityId: updatedTask._id, roomId: room._id,
+                        actionUrl: `/room/${room._id}?tab=classwork`,
+                        metadata: { taskId: updatedTask._id, dueDate: updatedTask.dueDate },
+                        dedupKey: `task_upd:${updatedTask._id}:${recipientId}:${Math.floor(stamp / 60000)}`
+                    })), req.io);
+                }).catch((e) => console.error("Task update notify error:", e.message));
             }
         }
 
