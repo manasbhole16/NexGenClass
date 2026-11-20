@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { getMailConfig, getTransporter, isEmailConfigured } = require("../config/mailer");
+const { getMailConfig, getTransporter, isEmailConfigured, hasBrevoApi } = require("../config/mailer");
 const logger = require("../utils/logger");
 
 const TEMPLATE_DIR = path.join(__dirname, "../templates/emails");
@@ -79,11 +79,38 @@ const renderNotificationEmail = ({ templateName, subject, recipientName, title, 
 // Errors worth retrying: network faults, 4xx SMTP (greylisting/rate limits), timeouts.
 const isTemporaryError = (err) => {
     if (!err) return false;
+    if (typeof err.temporary === "boolean") return err.temporary; // set by the HTTP API transport
     const code = err.responseCode;
     if (code && code >= 500) return false;
     if (code && code >= 400) return true;
     if (["EAUTH", "EENVELOPE", "EMESSAGE"].includes(err.code)) return false;
     return ["ECONNECTION", "ETIMEDOUT", "ESOCKET", "ECONNRESET", "EDNS", "ETIMEOUT", "EPROTOCOL"].includes(err.code) || !err.code;
+};
+
+const parseFrom = (from) => {
+    const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(from || "");
+    return m ? { name: m[1].trim() || undefined, email: m[2].trim() } : { email: String(from).trim() };
+};
+
+/**
+ * Brevo transactional API over HTTPS (port 443). Use when the host blocks outbound SMTP ports
+ * (e.g. Render free tier blocks 25/465/587). Needs BREVO_API_KEY (an "xkeysib-" API key, not the SMTP key).
+ */
+const sendViaBrevoApi = async ({ to, subject, text, html }) => {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ sender: parseFrom(getMailConfig().from), to: [{ email: to }], subject, htmlContent: html, textContent: text }),
+        signal: AbortSignal.timeout(20000)
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const e = new Error(`Brevo API ${res.status}: ${body.message || "request failed"}`);
+        e.temporary = res.status >= 500 || res.status === 429;
+        e.responseCode = res.status;
+        throw e;
+    }
+    return { messageId: body.messageId, accepted: [to], rejected: [] };
 };
 
 /** Send an already-rendered message. Throws on failure (callers classify via isTemporaryError). */
@@ -93,7 +120,9 @@ const sendRaw = async ({ to, subject, text, html }) => {
         e.code = "ENOTCONFIGURED";
         throw e;
     }
-    const info = await getTransporter().sendMail({ from: getMailConfig().from, to, subject, text, html });
+    const info = hasBrevoApi()
+        ? await sendViaBrevoApi({ to, subject, text, html })
+        : await getTransporter().sendMail({ from: getMailConfig().from, to, subject, text, html });
     logger.info("email.sent", { messageId: info.messageId, accepted: (info.accepted || []).length, rejected: (info.rejected || []).length });
     if (info.rejected && info.rejected.length && !(info.accepted && info.accepted.length)) {
         const e = new Error("All recipients rejected by SMTP server");
@@ -111,5 +140,5 @@ const sendNotificationEmail = async ({ to, ...rest }) => {
 };
 
 module.exports = {
-    sendRaw, sendNotificationEmail, renderNotificationEmail, renderString, escapeHtml, isTemporaryError, isEmailConfigured, buildActionLink, TEMPLATE_BY_CATEGORY
+    parseFrom, sendRaw, sendNotificationEmail, renderNotificationEmail, renderString, escapeHtml, isTemporaryError, isEmailConfigured, buildActionLink, TEMPLATE_BY_CATEGORY
 };

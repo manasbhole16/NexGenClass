@@ -23,9 +23,11 @@ const getMailConfig = () => {
     };
 };
 
+const hasBrevoApi = () => Boolean(process.env.BREVO_API_KEY);
+
 const isEmailConfigured = () => {
     const c = getMailConfig();
-    return Boolean(c.host && c.user && c.pass && c.from);
+    return Boolean((c.host && c.user && c.pass && c.from) || (hasBrevoApi() && c.from));
 };
 
 let cached = null;
@@ -59,7 +61,13 @@ const setTransporterForTests = (t) => {
 
 /** Development/testing helper: verifies SMTP connectivity + auth. */
 const verifyConnection = async () => {
-    if (!isEmailConfigured()) return { ok: false, error: "SMTP is not configured" };
+    if (!isEmailConfigured()) return { ok: false, error: "Email is not configured" };
+    if (hasBrevoApi()) {
+        try {
+            const r = await fetch("https://api.brevo.com/v3/account", { headers: { "api-key": process.env.BREVO_API_KEY }, signal: AbortSignal.timeout(15000) });
+            return r.ok ? { ok: true, transport: "brevo-api" } : { ok: false, error: `Brevo API ${r.status}` };
+        } catch (err) { return { ok: false, error: err.message }; }
+    }
     try {
         await getTransporter().verify();
         return { ok: true };
@@ -68,4 +76,4 @@ const verifyConnection = async () => {
     }
 };
 
-module.exports = { getMailConfig, isEmailConfigured, getTransporter, setTransporterForTests, verifyConnection };
+module.exports = { hasBrevoApi, getMailConfig, isEmailConfigured, getTransporter, setTransporterForTests, verifyConnection };

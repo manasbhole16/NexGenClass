@@ -45,3 +45,7 @@ ETIMEDOUT/ECONNECTION = network or port blocked (try 465 with SMTP_SECURE=true);
 ## Deployment notes
 Socket.IO, node-cron and local `uploads/` need a long-running server (Render/Railway/VPS). On Vercel serverless call
 `/internal/run-scheduled` from a cron service every few minutes; real-time push will not work there.
+
+## Render / hosts that block SMTP
+Render's free tier blocks outbound ports 25, 465 and 587 (symptom: `Connection timeout`, email stays `queued`).
+Set `BREVO_API_KEY` (Brevo -> SMTP & API -> API Keys) to send over HTTPS port 443, or try `SMTP_PORT=2525`.
