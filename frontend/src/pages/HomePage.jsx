@@ -8,7 +8,7 @@ import {
     MessageSquare, ClipboardList, LayoutDashboard, Award, BrainCircuit, BarChart2,
     Calendar, CheckCircle, FileText, Filter, ChevronDown, ChevronRight, Layers,
     BookOpen, CheckSquare, Paperclip, Clock, Sparkles, FileSpreadsheet, MoreVertical,
-    Edit2, ArrowUp, ArrowDown, Send, FolderPlus, X, Brain, Video
+    Edit2, ArrowUp, ArrowDown, Send, Folder, FolderPlus, X, Brain, Video
 } from 'lucide-react';
 import TaskCard from '../components/board/TaskCard';
 import API_BASE_URL from '../apiConfig';

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import API_BASE_URL from '../../apiConfig';
+import { useSocket } from '../../context/SocketContext';
 import Whiteboard from './Whiteboard';
 import LiveScheduleModal from './LiveScheduleModal';
 
